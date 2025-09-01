@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 @TeleOp(name="ButtonTest", group="Testing")
 public class ButtonTest extends OpMode {
@@ -26,9 +27,9 @@ public class ButtonTest extends OpMode {
 
         // Set all motor directions to forward
         frontLeft.setDirection(DcMotor.Direction.FORWARD);
-        frontRight.setDirection(DcMotor.Direction.FORWARD);
+        frontRight.setDirection(DcMotor.Direction.REVERSE);
         backLeft.setDirection(DcMotor.Direction.FORWARD);
-        backRight.setDirection(DcMotor.Direction.FORWARD);
+        backRight.setDirection(DcMotor.Direction.REVERSE);
 
         // Set motors to brake when power is zero
         frontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -47,19 +48,19 @@ public class ButtonTest extends OpMode {
         stopAllMotors();
 
         // Check button presses and run corresponding motor
-        if (gamepad1.square) {
+        if (gamepad1.y) {
             frontLeft.setPower(motorPower);
             telemetry.addData("Active Motor", "Front Left");
         }
-        else if (gamepad1.triangle) {
+        else if (gamepad1.x) {
             frontRight.setPower(motorPower);
             telemetry.addData("Active Motor", "Front Right");
         }
-        else if (gamepad1.circle) {
+        else if (gamepad1.b) {
             backRight.setPower(motorPower);
             telemetry.addData("Active Motor", "Back Right");
         }
-        else if (gamepad1.x) {
+        else if (gamepad1.a) {
             backLeft.setPower(motorPower);
             telemetry.addData("Active Motor", "Back Left");
         }
