@@ -3,10 +3,9 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
-@TeleOp(name="ButtonTest", group="Testing")
-public class ButtonTest extends OpMode {
+@TeleOp(name="FourButtonMovementTest", group="Testing")
+public class FourButtonMovementTest extends OpMode {
 
     // Motor declarations
     private DcMotor frontLeft;
@@ -16,6 +15,8 @@ public class ButtonTest extends OpMode {
 
     // Motor power setting
     private double motorPower = 0.5; // Adjust this value as needed (0.0 to 1.0)
+    private double reverseMotorPower = -0.5; // Adjust this value as needed (0.0 to 1.0)
+
 
     @Override
     public void init() {
@@ -26,10 +27,10 @@ public class ButtonTest extends OpMode {
         backRight = hardwareMap.get(DcMotor.class, "backRight");
 
         // Set all motor directions to forward
-        frontLeft.setDirection(DcMotor.Direction.FORWARD);
-        frontRight.setDirection(DcMotor.Direction.REVERSE);
-        backLeft.setDirection(DcMotor.Direction.FORWARD);
-        backRight.setDirection(DcMotor.Direction.REVERSE);
+        frontLeft.setDirection(DcMotor.Direction.REVERSE);
+        frontRight.setDirection(DcMotor.Direction.FORWARD);
+        backLeft.setDirection(DcMotor.Direction.REVERSE);
+        backRight.setDirection(DcMotor.Direction.FORWARD);
 
         // Set motors to brake when power is zero
         frontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -50,18 +51,30 @@ public class ButtonTest extends OpMode {
         // Check button presses and run corresponding motor
         if (gamepad1.y) {
             frontLeft.setPower(motorPower);
+            backLeft.setPower(motorPower);
+            frontRight.setPower(motorPower);
+            backRight.setPower(motorPower);
             telemetry.addData("Active Motor", "Front Left");
         }
         else if (gamepad1.x) {
+            frontLeft.setPower(reverseMotorPower);
+            backLeft.setPower(reverseMotorPower);
             frontRight.setPower(motorPower);
+            backRight.setPower(motorPower);
             telemetry.addData("Active Motor", "Front Right");
         }
         else if (gamepad1.b) {
-            backRight.setPower(motorPower);
+            frontLeft.setPower(motorPower);
+            backLeft.setPower(motorPower);
+            frontRight.setPower(reverseMotorPower);
+            backRight.setPower(reverseMotorPower);
             telemetry.addData("Active Motor", "Back Right");
         }
         else if (gamepad1.a) {
-            backLeft.setPower(motorPower);
+            frontLeft.setPower(reverseMotorPower);
+            backLeft.setPower(reverseMotorPower);
+            frontRight.setPower(reverseMotorPower);
+            backRight.setPower(reverseMotorPower);
             telemetry.addData("Active Motor", "Back Left");
         }
         else {
