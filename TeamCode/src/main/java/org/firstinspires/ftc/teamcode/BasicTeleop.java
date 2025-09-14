@@ -25,8 +25,8 @@ public class BasicTeleop extends LinearOpMode {
     private List<LynxModule> allHubs;
     private IMU imu;
     private static final boolean FIELD_CENTRIC = false; // Set to true for field-centric driving, false for POV
-    private Servo clawservo;
-    private Servo pivotservo;
+    //private Servo clawservo;
+    //private Servo pivotservo;
 
 
 
@@ -84,8 +84,8 @@ public class BasicTeleop extends LinearOpMode {
 
 
         // Initialize the servo and map it
-        clawservo = hardwareMap.get(Servo.class, "clawservo");
-        pivotservo = hardwareMap.get(Servo.class, "pivotservo");
+        //clawservo = hardwareMap.get(Servo.class, "clawservo");
+        //pivotservo = hardwareMap.get(Servo.class, "pivotservo");
 
 
         telemetry.addLine("Initialized. Waiting for start...");
@@ -142,19 +142,19 @@ public class BasicTeleop extends LinearOpMode {
 
 
             if(gamepad1.a){;
-                clawservo.setPosition(0);
+               // clawservo.setPosition(0);
 //            servo.setPower(0.5);
             }
             if(gamepad1.b){
-                clawservo.setPosition(1);
+                //clawservo.setPosition(1);
 //            servo.setPower(0.6);
             }
             if(gamepad1.x){;
-                pivotservo.setPosition(0);
+                //pivotservo.setPosition(0);
 //            servo.setPower(0.5);
             }
             if(gamepad1.y){
-                pivotservo.setPosition(1);
+                //pivotservo.setPosition(1);
 //            servo.setPower(1);
             }
 
@@ -166,8 +166,8 @@ public class BasicTeleop extends LinearOpMode {
             telemetry.addData("FR", frPower);
             telemetry.addData("BL", blPower);
             telemetry.addData("BR", brPower);
-            telemetry.addData("Servo Pos", pivotservo.getPosition());
-            telemetry.addData("Servo Pos", clawservo.getPosition());
+            //telemetry.addData("Servo Pos", pivotservo.getPosition());
+            //telemetry.addData("Servo Pos", clawservo.getPosition());
             telemetry.update();
         }
     }

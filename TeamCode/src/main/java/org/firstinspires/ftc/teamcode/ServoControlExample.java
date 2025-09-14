@@ -22,7 +22,7 @@ public class ServoControlExample extends OpMode {
     public void init() {
         // Initialize the servo
         // Replace "servo_name" with the actual name configured in your robot configuration
-        myServo = hardwareMap.get(Servo.class, "servo_name");
+        myServo = hardwareMap.get(Servo.class, "AutonClaw");
 
         // Set initial servo position
         myServo.setPosition(servoPosition);
