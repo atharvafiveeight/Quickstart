@@ -21,8 +21,8 @@ public class AdvancedTeleop extends LinearOpMode {
     private List<LynxModule> allHubs;
     private IMU imu;
     private static final boolean FIELD_CENTRIC = false; // Set to true for field-centric driving, false for POV
-    private Servo clawservo;
-    private Servo pivotservo;
+    //private Servo clawservo;
+    //private Servo pivotservo;
 
     // Anti-drift constants
     private static final double JOYSTICK_DEADZONE = 0.15; // Increased from 0.05
@@ -74,8 +74,8 @@ public class AdvancedTeleop extends LinearOpMode {
         imu.initialize(parameters);
 
         // Initialize the servo and map it
-        clawservo = hardwareMap.get(Servo.class, "clawservo");
-        pivotservo = hardwareMap.get(Servo.class, "pivotservo");
+       // clawservo = hardwareMap.get(Servo.class, "clawservo");
+        //pivotservo = hardwareMap.get(Servo.class, "pivotservo");
 
         telemetry.addLine("Initialized. Waiting for start...");
         telemetry.update();
@@ -130,16 +130,16 @@ public class AdvancedTeleop extends LinearOpMode {
 
             // Servo controls
             if(gamepad1.a) {
-                clawservo.setPosition(0);
+         //       clawservo.setPosition(0);
             }
             if(gamepad1.b) {
-                clawservo.setPosition(1);
+           //     clawservo.setPosition(1);
             }
             if(gamepad1.x) {
-                pivotservo.setPosition(0);
+           //     pivotservo.setPosition(0);
             }
             if(gamepad1.y) {
-                pivotservo.setPosition(1);
+            //    pivotservo.setPosition(1);
             }
 
             // Show telemetry
@@ -149,8 +149,8 @@ public class AdvancedTeleop extends LinearOpMode {
             telemetry.addData("FR", "%.3f", frPower);
             telemetry.addData("BL", "%.3f", blPower);
             telemetry.addData("BR", "%.3f", brPower);
-            telemetry.addData("Claw Pos", "%.2f", clawservo.getPosition());
-            telemetry.addData("Pivot Pos", "%.2f", pivotservo.getPosition());
+            //telemetry.addData("Claw Pos", "%.2f", clawservo.getPosition());
+            //telemetry.addData("Pivot Pos", "%.2f", pivotservo.getPosition());
             telemetry.addData("Deadzone", JOYSTICK_DEADZONE);
             telemetry.update();
         }
