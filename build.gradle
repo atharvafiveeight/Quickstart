@@ -8,6 +8,9 @@ buildscript {
     repositories {
         mavenCentral()
         google()
+        //maven { url 'https://www.ftc.io/maven' }
+        // The following line is essential for the latest SDK
+        //maven { url 'https://jitpack.io' }
     }
     dependencies {
         // Note for FTC Teams: Do not modify this yourself.

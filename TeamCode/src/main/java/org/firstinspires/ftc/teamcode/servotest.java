@@ -23,11 +23,11 @@ public class servotest extends OpMode {
     public void loop() {
 
 
-        if(gamepad1.a){;
+        if(gamepad1.dpad_down){;
             pivotservo.setPosition(0);
 //            servo.setPower(1);
         }
-        if(gamepad1.b){
+        if(gamepad1.dpad_down){
             pivotservo.setPosition(1);
 //            servo.setPower(-1);
         }

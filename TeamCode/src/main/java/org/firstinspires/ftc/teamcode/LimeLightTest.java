@@ -13,19 +13,26 @@ private Limelight3A limelight3A;
     @Override
     public void init() {
         limelight3A = hardwareMap.get(Limelight3A.class, "limelight");
-        limelight3A.pipelineSwitch(-0);
+        limelight3A.pipelineSwitch(9);
+        limelight3A.start();
     }
     @Override
     public void start() {
-        Limelight3A.start();
+        //limelight3A.start();
     }
     @Override
     public void loop() {
         LLResult llResult = limelight3A.getLatestResult();
-        if (llResult != null && llResult.isvalid()) {
+
+        telemetry.addData("Version V:", 2);
+        if (llResult != null && llResult.isValid()) {
+            telemetry.addData(" Got results for llResult", 1);
             telemetry.addData("Target X offset", llResult.getTx());
             telemetry.addData("Target Y offset", llResult.getTy());
             telemetry.addData("Target Area offset", llResult.getTa());
+        } else {
+            telemetry.addData("Did not get results for llResult", -1);
         }
+        telemetry.update();
     }
 }
