@@ -14,6 +14,7 @@ public class RobotTeleopModified extends LinearOpMode {
     private DcMotor backLeft;
     private DcMotor frontRight;
     private DcMotor backRight;
+    private DcMotor shooterMotor;
     private CRServo leftServo;
     private CRServo rightServo;
 
@@ -28,6 +29,8 @@ public class RobotTeleopModified extends LinearOpMode {
         backRight = hardwareMap.get(DcMotor.class, "backRight");
         frontLeft = hardwareMap.get(DcMotor.class, "frontLeft");
         backLeft = hardwareMap.get(DcMotor.class, "backLeft");
+        shooterMotor = hardwareMap.get(DcMotor.class, "shooterMotor");
+
         // Initialize servos (using CRServo for continuous rotation)
         leftServo = hardwareMap.get(CRServo.class, "leftServo");
         rightServo = hardwareMap.get(CRServo.class, "rightServo");
@@ -37,16 +40,24 @@ public class RobotTeleopModified extends LinearOpMode {
         backRight.setDirection(DcMotor.Direction.FORWARD);
         frontLeft.setDirection(DcMotor.Direction.FORWARD);
         backLeft.setDirection(DcMotor.Direction.FORWARD);
+        rightServo.setDirection(DcMotorSimple.Direction.REVERSE);
+        shooterMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+
+
         // Set motor modes
         frontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         frontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        shooterMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
 
         frontRight.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         backRight.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         frontLeft.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         backLeft.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
         // Stop servos initially
         leftServo.setPower(0);
         rightServo.setPower(0);
@@ -81,9 +92,12 @@ public class RobotTeleopModified extends LinearOpMode {
             if (gamepad1.right_bumper) {
                 leftServo.setPower(1);
                 rightServo.setPower(1);
+                shooterMotor.setPower(0.75);
+
             } else {
                 leftServo.setPower(0);
                 rightServo.setPower(0);
+                shooterMotor.setPower(0);
             }
             // Telemetry for debugging
             telemetry.addData("Drive Power", "%.2f", drive);

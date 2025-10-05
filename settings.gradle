@@ -1,2 +1,17 @@
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        // Add the JitPack repository here
+        maven { url 'https://jitpack.io' }
+
+        // Repositories moved from build.dependencies.gradle
+        maven { url "https://maven.pedropathing.com/" }
+        maven { url "https://mymaven.bylazar.com/releases" }
+        maven { url "https://maven.brott.dev/releases" }
+    }
+}
+
 include ':FtcRobotController'
 include ':TeamCode'

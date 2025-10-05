@@ -8,10 +8,8 @@
  *   copies of the Software, and to permit persons to whom the Software is
  *   furnished to do so, subject to the following conditions:
 
-
  *   The above copyright notice and this permission notice shall be included in all
  *   copies or substantial portions of the Software.
-
 
  *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  *   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -22,12 +20,9 @@
  *   SOFTWARE.
  */
 
-
 package org.firstinspires.ftc.teamcode;
 
-
 import static com.qualcomm.robotcore.util.TypeConversion.byteArrayToInt;
-
 
 import com.qualcomm.hardware.lynx.LynxI2cDeviceSynch;
 import com.qualcomm.robotcore.hardware.I2cAddr;
@@ -37,18 +32,14 @@ import com.qualcomm.robotcore.hardware.configuration.annotations.DevicePropertie
 import com.qualcomm.robotcore.hardware.configuration.annotations.I2cDeviceType;
 import com.qualcomm.robotcore.util.TypeConversion;
 
-
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit;
 
-
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
-
-
 
 
 @I2cDeviceType
@@ -56,11 +47,9 @@ import java.util.Arrays;
         name = "goBILDA® Pinpoint Odometry Computer",
         xmlTag = "goBILDAPinpoint",
         description ="goBILDA® Pinpoint Odometry Computer (IMU Sensor Fusion for 2 Wheel Odometry)"
-)
+        )
 
-
-public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
-
+public class GoBildaPinpointDriver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
 
     private int deviceStatus   = 0;
     private int loopTime       = 0;
@@ -73,24 +62,18 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     private float yVelocity    = 0;
     private float hVelocity    = 0;
 
-
     private static final float goBILDA_SWINGARM_POD = 13.26291192f; //ticks-per-mm for the goBILDA Swingarm Pod
     private static final float goBILDA_4_BAR_POD    = 19.89436789f; //ticks-per-mm for the goBILDA 4-Bar Pod
-
 
     //i2c address of the device
     public static final byte DEFAULT_ADDRESS = 0x31;
 
-
-    public driver(I2cDeviceSynchSimple deviceClient, boolean deviceClientIsOwned) {
+    public GoBildaPinpointDriver(I2cDeviceSynchSimple deviceClient, boolean deviceClientIsOwned) {
         super(deviceClient, deviceClientIsOwned);
-
 
         this.deviceClient.setI2cAddress(I2cAddr.create7bit(DEFAULT_ADDRESS));
         super.registerArmingStateCallback(false);
     }
-
-
 
 
     @Override
@@ -98,20 +81,16 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return Manufacturer.Other;
     }
 
-
     @Override
     protected synchronized boolean doInitialize() {
         ((LynxI2cDeviceSynch)(deviceClient)).setBusSpeed(LynxI2cDeviceSynch.BusSpeed.FAST_400K);
         return true;
     }
 
-
     @Override
     public String getDeviceName() {
         return "goBILDA® Pinpoint Odometry Computer";
     }
-
-
 
 
     //Register map of the i2c device
@@ -135,15 +114,12 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         YAW_SCALAR      (17),
         BULK_READ       (18);
 
-
         private final int bVal;
-
 
         Register(int bVal){
             this.bVal = bVal;
         }
     }
-
 
     //Device Status enum that captures the current fault condition of the device
     public enum DeviceStatus{
@@ -156,22 +132,18 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         FAULT_IMU_RUNAWAY        (1 << 4),
         FAULT_BAD_READ           (1 << 5);
 
-
         private final int status;
-
 
         DeviceStatus(int status){
             this.status = status;
         }
     }
 
-
     //enum that captures the direction the encoders are set to
     public enum EncoderDirection{
         FORWARD,
         REVERSED;
     }
-
 
     //enum that captures the kind of goBILDA odometry pods, if goBILDA pods are used
     public enum GoBildaOdometryPods {
@@ -184,16 +156,13 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     }
 
 
-
-
     /** Writes an int to the i2c device
-     @param reg the register to write the int to
+    @param reg the register to write the int to
      @param i the integer to write to the register
      */
     private void writeInt(final Register reg, int i){
         deviceClient.write(reg.bVal, TypeConversion.intToByteArray(i,ByteOrder.LITTLE_ENDIAN));
     }
-
 
     /**
      * Reads an int from a register of the i2c device
@@ -203,7 +172,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     private int readInt(Register reg){
         return byteArrayToInt(deviceClient.read(reg.bVal,4), ByteOrder.LITTLE_ENDIAN);
     }
-
 
     /**
      * Converts a byte array to a float value
@@ -215,7 +183,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return ByteBuffer.wrap(byteArray).order(byteOrder).getFloat();
     }
 
-
     /**
      * Reads a float from a register
      * @param reg the register to read
@@ -224,7 +191,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     private float readFloat(Register reg){
         return byteArrayToFloat(deviceClient.read(reg.bVal,4),ByteOrder.LITTLE_ENDIAN);
     }
-
 
     /**
      * Converts a float to a byte array
@@ -235,7 +201,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return ByteBuffer.allocate(4).order(byteOrder).putFloat(value).array();
     }
 
-
     /**
      * Writes a byte array to a register on the i2c device
      * @param reg the register to write to
@@ -244,7 +209,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     private void writeByteArray (Register reg, byte[] bytes){
         deviceClient.write(reg.bVal,bytes);
     }
-
 
     /**
      * Writes a float to a register on the i2c device
@@ -255,7 +219,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         byte[] bytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putFloat(f).array();
         deviceClient.write(reg.bVal,bytes);
     }
-
 
     /**
      * Looks up the DeviceStatus enum corresponding with an int value
@@ -268,7 +231,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         }
         boolean xPodDetected = (s & DeviceStatus.FAULT_X_POD_NOT_DETECTED.status) == 0;
         boolean yPodDetected = (s & DeviceStatus.FAULT_Y_POD_NOT_DETECTED.status) == 0;
-
 
         if(!xPodDetected  && !yPodDetected){
             return DeviceStatus.FAULT_NO_PODS_DETECTED;
@@ -293,7 +255,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         }
     }
 
-
     /**
      * Confirm that the number received is a number, and does not include a change above the threshold
      * @param oldValue the reading from the previous cycle
@@ -305,19 +266,15 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     private Float isPositionCorrupt(float oldValue, float newValue, int threshold, boolean bulkUpdate){
         boolean noData = bulkUpdate && (loopTime < 1);
 
-
         boolean isCorrupt = noData || Float.isNaN(newValue) || Math.abs(newValue - oldValue) > threshold;
-
 
         if(!isCorrupt){
             return newValue;
         }
 
-
         deviceStatus = DeviceStatus.FAULT_BAD_READ.status;
         return oldValue;
     }
-
 
     /**
      * Confirm that the number received is a number, and does not include a change above the threshold
@@ -330,16 +287,13 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         boolean isCorrupt = Float.isNaN(newValue) || Math.abs(newValue) > threshold;
         boolean noData = (loopTime <= 1);
 
-
         if(!isCorrupt){
             return newValue;
         }
 
-
         deviceStatus = DeviceStatus.FAULT_BAD_READ.status;
         return oldValue;
     }
-
 
     /**
      * Call this once per loop to read new data from the Odometry Computer. Data will only update once this is called.
@@ -350,14 +304,12 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         final int velocityThreshold = 10000; //10k mm/sec is faster than an FTC robot should be going...
         final int headingVelocityThreshold = 120; //About 20 rotations per second
 
-
         float oldPosX = xPosition;
         float oldPosY = yPosition;
         float oldPosH = hOrientation;
         float oldVelX = xVelocity;
         float oldVelY = yVelocity;
         float oldVelH = hVelocity;
-
 
         byte[] bArr   = deviceClient.read(Register.BULK_READ.bVal, 40);
         deviceStatus  = byteArrayToInt(Arrays.copyOfRange  (bArr, 0, 4),  ByteOrder.LITTLE_ENDIAN);
@@ -371,7 +323,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         yVelocity     = byteArrayToFloat(Arrays.copyOfRange(bArr, 32,36), ByteOrder.LITTLE_ENDIAN);
         hVelocity     = byteArrayToFloat(Arrays.copyOfRange(bArr, 36,40), ByteOrder.LITTLE_ENDIAN);
 
-
         /*
          * Check to see if any of the floats we have received from the device are NaN or are too large
          * if they are, we return the previously read value and alert the user via the DeviceStatus Enum.
@@ -383,9 +334,7 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         yVelocity    = isVelocityCorrupt(oldVelY, yVelocity, velocityThreshold);
         hVelocity    = isVelocityCorrupt(oldVelH, hVelocity, headingVelocityThreshold);
 
-
     }
-
 
     /**
      * Call this once per loop to read new data from the Odometry Computer. This is an override of the update() function
@@ -397,22 +346,17 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         if (data == ReadData.ONLY_UPDATE_HEADING) {
             final int headingThreshold = 120;
 
-
             float oldPosH = hOrientation;
-
 
             hOrientation = byteArrayToFloat(deviceClient.read(Register.H_ORIENTATION.bVal, 4), ByteOrder.LITTLE_ENDIAN);
 
-
             hOrientation = isPositionCorrupt(oldPosH, hOrientation, headingThreshold, false);
-
 
             if (deviceStatus == DeviceStatus.FAULT_BAD_READ.status){
                 deviceStatus = DeviceStatus.READY.status;
             }
         }
     }
-
 
     /**
      * Sets the odometry pod positions relative to the point that the odometry computer tracks around.<br><br>
@@ -428,7 +372,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         writeFloat(Register.Y_POD_OFFSET, (float) yOffset);
     }
 
-
     /**
      * Sets the odometry pod positions relative to the point that the odometry computer tracks around.<br><br>
      * The most common tracking position is the center of the robot. <br> <br>
@@ -443,7 +386,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         writeFloat(Register.Y_POD_OFFSET, (float) distanceUnit.toMm(yOffset));
     }
 
-
     /**
      * Recalibrates the Odometry Computer's internal IMU. <br><br>
      * <strong> Robot MUST be stationary </strong> <br><br>
@@ -451,14 +393,12 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
      */
     public void recalibrateIMU(){writeInt(Register.DEVICE_CONTROL,1<<0);}
 
-
     /**
      * Resets the current position to 0,0,0 and recalibrates the Odometry Computer's internal IMU. <br><br>
      * <strong> Robot MUST be stationary </strong> <br><br>
      * Device takes a large number of samples, and uses those as the gyroscope zero-offset. This takes approximately 0.25 seconds.
      */
     public void resetPosAndIMU(){writeInt(Register.DEVICE_CONTROL,1<<1);}
-
 
     /**
      * Can reverse the direction of each encoder.
@@ -473,7 +413,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
             writeInt(Register.DEVICE_CONTROL,1<<4);
         }
 
-
         if (yEncoder == EncoderDirection.FORWARD){
             writeInt(Register.DEVICE_CONTROL,1<<3);
         }
@@ -481,7 +420,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
             writeInt(Register.DEVICE_CONTROL,1<<2);
         }
     }
-
 
     /**
      * If you're using goBILDA odometry pods, the ticks-per-mm values are stored here for easy access.<br><br>
@@ -496,7 +434,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         }
     }
 
-
     /**
      * Sets the encoder resolution in ticks per mm of the odometry pods. <br>
      * You can find this number by dividing the counts-per-revolution of your encoder by the circumference of the wheel.
@@ -506,7 +443,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     public void setEncoderResolution(double ticks_per_mm){
         writeByteArray(Register.MM_PER_TICK,(floatToByteArray((float) ticks_per_mm,ByteOrder.LITTLE_ENDIAN)));
     }
-
 
     /**
      * Sets the encoder resolution in ticks per mm of the odometry pods. <br>
@@ -518,7 +454,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         double resolution = distanceUnit.toMm(ticks_per_unit);
         writeByteArray(Register.MM_PER_TICK,(floatToByteArray((float) resolution,ByteOrder.LITTLE_ENDIAN)));
     }
-
 
     /**
      * Tuning this value should be unnecessary.<br>
@@ -532,7 +467,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     public void setYawScalar(double yawOffset){
         writeByteArray(Register.YAW_SCALAR,(floatToByteArray((float) yawOffset, ByteOrder.LITTLE_ENDIAN)));
     }
-
 
     /**
      * Send a position that the Pinpoint should use to track your robot relative to. You can use this to
@@ -563,7 +497,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return pos;
     }
 
-
     /**
      * Send a position that the Pinpoint should use to track your robot relative to.
      * You can use this to update the estimated position of your robot with new external
@@ -574,7 +507,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     public void setPosX(double posX, DistanceUnit distanceUnit){
         writeByteArray(Register.X_POSITION,(floatToByteArray((float) distanceUnit.toMm(posX), ByteOrder.LITTLE_ENDIAN)));
     }
-
 
     /**
      * Send a position that the Pinpoint should use to track your robot relative to.
@@ -587,7 +519,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         writeByteArray(Register.Y_POSITION,(floatToByteArray((float) distanceUnit.toMm(posY), ByteOrder.LITTLE_ENDIAN)));
     }
 
-
     /**
      * Send a heading that the Pinpoint should use to track your robot relative to.
      * You can use this to update the estimated position of your robot with new external
@@ -599,26 +530,22 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         writeByteArray(Register.H_ORIENTATION,(floatToByteArray((float) angleUnit.toRadians(heading), ByteOrder.LITTLE_ENDIAN)));
     }
 
-
     /**
      * Checks the deviceID of the Odometry Computer. Should return 1.
      * @return 1 if device is functional.
      */
     public int getDeviceID(){return readInt(Register.DEVICE_ID);}
 
-
     /**
      * @return the firmware version of the Odometry Computer
      */
     public int getDeviceVersion(){return readInt(Register.DEVICE_VERSION); }
-
 
     /**
      * @return a scalar that the IMU measured heading is multiplied by. This is tuned for each unit
      * and should not need adjusted.
      */
     public float getYawScalar(){return readFloat(Register.YAW_SCALAR); }
-
 
     /**
      * Device Status stores any faults the Odometry Computer may be experiencing. These faults include:
@@ -634,14 +561,12 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
      */
     public DeviceStatus getDeviceStatus(){return lookupStatus(deviceStatus); }
 
-
     /**
      * Checks the Odometry Computer's most recent loop time.<br><br>
      * If values less than 500, or more than 1100 are commonly seen here, there may be something wrong with your device. Please reach out to tech@gobilda.com
      * @return loop time in microseconds (1/1,000,000 seconds)
      */
     public int getLoopTime(){return loopTime; }
-
 
     /**
      * Checks the Odometry Computer's most recent loop frequency.<br><br>
@@ -657,18 +582,15 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         }
     }
 
-
     /**
      * @return the raw value of the X (forward) encoder in ticks
      */
     public int getEncoderX(){return xEncoderValue; }
 
-
     /**
      * @return the raw value of the Y (strafe) encoder in ticks
      */
     public int getEncoderY(){return yEncoderValue; }
-
 
     /**
      * @return the estimated X (forward) position of the robot in mm
@@ -678,7 +600,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return xPosition;
     }
 
-
     /**
      * @return the estimated X (forward) position of the robot in specified unit
      * @param distanceUnit the unit that the estimated position will return in
@@ -686,7 +607,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     public double getPosX(DistanceUnit distanceUnit){
         return distanceUnit.fromMm(xPosition);
     }
-
 
     /**
      * @return the estimated Y (Strafe) position of the robot in mm
@@ -696,7 +616,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return yPosition;
     }
 
-
     /**
      * @return the estimated Y (Strafe) position of the robot in specified unit
      * @param distanceUnit the unit that the estimated position will return in
@@ -704,7 +623,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     public double getPosY(DistanceUnit distanceUnit){
         return distanceUnit.fromMm(yPosition);
     }
-
 
     /**
      * @return the unnormalized estimated H (heading) position of the robot in radians
@@ -715,7 +633,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return hOrientation;
     }
 
-
     /**
      * @return the normalized estimated H (heading) position of the robot in specified unit
      * normalized heading is wrapped from -180°, to 180°.
@@ -723,7 +640,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     public double getHeading(AngleUnit angleUnit){
         return angleUnit.fromRadians((hOrientation + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
     }
-
 
     /**
      * @return the unnormalized estimated H (heading) position of the robot in specified unit
@@ -734,7 +650,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return unnormalizedAngleUnit.fromRadians(hOrientation);
     }
 
-
     /**
      * @return the estimated X (forward) velocity of the robot in mm/sec
      * @deprecated The overflow for this function has a DistanceUnit, which can reduce the chance of unit confusion.
@@ -743,14 +658,12 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return xVelocity;
     }
 
-
     /**
      * @return the estimated X (forward) velocity of the robot in specified unit/sec
      */
     public double getVelX(DistanceUnit distanceUnit){
         return distanceUnit.fromMm(xVelocity);
     }
-
 
     /**
      * @return the estimated Y (strafe) velocity of the robot in mm/sec
@@ -760,14 +673,12 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return yVelocity;
     }
 
-
     /**
      * @return the estimated Y (strafe) velocity of the robot in specified unit/sec
      */
     public double getVelY(DistanceUnit distanceUnit){
         return distanceUnit.fromMm(yVelocity);
     }
-
 
     /**
      * @return the estimated H (heading) velocity of the robot in radians/sec
@@ -777,14 +688,12 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return hVelocity;
     }
 
-
     /**
      * @return the estimated H (heading) velocity of the robot in specified unit/sec
      */
     public double getHeadingVelocity(UnnormalizedAngleUnit unnormalizedAngleUnit){
         return unnormalizedAngleUnit.fromRadians(hVelocity);
     }
-
 
     /**
      * <strong> This uses its own I2C read, avoid calling this every loop. </strong>
@@ -794,7 +703,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         return (float) distanceUnit.fromMm(readFloat(Register.X_POD_OFFSET));
     }
 
-
     /**
      * <strong> This uses its own I2C read, avoid calling this every loop. </strong>
      * @return the user-set offset for the Y (strafe) pod
@@ -802,7 +710,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
     public float getYOffset(DistanceUnit distanceUnit){
         return (float) distanceUnit.fromMm(readFloat(Register.Y_POD_OFFSET));
     }
-
 
     /**
      * @return a Pose2D containing the estimated position of the robot
@@ -815,7 +722,6 @@ public class driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
                 //this wraps the hOrientation variable from -180° to +180°
                 ((hOrientation + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI);
     }
-
 
     /**
      * @deprecated This function is not recommended, as velocity is wrapped from -180° to 180°.

@@ -14,7 +14,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 
 import java.util.List;
 
-@TeleOp(name = "AdvancedTeleop")
+@TeleOp(name = "MainOverdriveTeleOp")
 public class MainOverdriveTeleOp extends LinearOpMode {
 
     private DcMotorEx frontLeft, frontRight, backLeft, backRight;
