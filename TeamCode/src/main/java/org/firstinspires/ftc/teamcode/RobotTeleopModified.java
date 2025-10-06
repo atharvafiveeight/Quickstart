@@ -90,9 +90,11 @@ public class RobotTeleopModified extends LinearOpMode {
             frontLeft.setPower(-drive);
             backLeft.setPower(-drive);
             if (gamepad1.right_bumper) {
+                shooterMotor.setPower(0.75);
+                sleep(500);
                 leftServo.setPower(1);
                 rightServo.setPower(1);
-                shooterMotor.setPower(0.75);
+
 
             } else {
                 leftServo.setPower(0);
