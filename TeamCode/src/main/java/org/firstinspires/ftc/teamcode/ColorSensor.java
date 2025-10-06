@@ -8,81 +8,81 @@ import com.qualcomm.robotcore.hardware.SwitchableLight;
 
 @TeleOp(name = "Color Sensor", group = "Sensor")
 public class ColorSensor extends LinearOpMode {
-    
+
     private NormalizedColorSensor colorSensor;
-    
+
     @Override
     public void runOpMode() {
         // Initialize the color sensor
         colorSensor = hardwareMap.get(NormalizedColorSensor.class, "color_sensor");
-        
+
         // Set gain if the sensor supports it (higher gain = more sensitive)
         if (colorSensor instanceof SwitchableLight) {
             ((SwitchableLight) colorSensor).enableLight(true);
         }
-        
+
         telemetry.addData("Status", "Initialized");
         telemetry.addData(">", "Press Play to start");
         telemetry.update();
-        
+
         waitForStart();
-        
+
         while (opModeIsActive()) {
             // Read normalized color values
             NormalizedRGBA colors = colorSensor.getNormalizedColors();
-            
+
             // Display RGB values
             telemetry.addLine()
                     .addData("Red", "%.3f", colors.red)
                     .addData("Green", "%.3f", colors.green)
                     .addData("Blue", "%.3f", colors.blue);
-            
+
             telemetry.addData("Alpha (brightness)", "%.3f", colors.alpha);
-            
+
             // Convert to HSV for easier color identification
             float[] hsv = new float[3];
             android.graphics.Color.colorToHSV(colors.toColor(), hsv);
-            
+
             telemetry.addLine()
                     .addData("Hue", "%.1f", hsv[0])
                     .addData("Saturation", "%.3f", hsv[1])
                     .addData("Value", "%.3f", hsv[2]);
-            
+
             // Identify dominant color
             String detectedColor = identifyColor(colors);
             telemetry.addData("Detected Color", detectedColor);
-            
+
             // Get raw ARGB value
             int color = colors.toColor();
-            telemetry.addData("Hex Color", "#%02X%02X%02X%02X", 
+            telemetry.addData("Hex Color", "#%02X%02X%02X%02X",
                     android.graphics.Color.alpha(color),
                     android.graphics.Color.red(color),
                     android.graphics.Color.green(color),
                     android.graphics.Color.blue(color));
-            
+
             telemetry.update();
         }
-        
+
         // Turn off the light when done
         if (colorSensor instanceof SwitchableLight) {
             ((SwitchableLight) colorSensor).enableLight(false);
         }
     }
-    
+
     /**
      * Identifies if the color is green or purple
      */
     private String identifyColor(NormalizedRGBA colors) {
         // Threshold for detecting color (adjust as needed)
         float threshold = 0.1f;
-        
+
         // Find the maximum color component
         float max = Math.max(colors.red, Math.max(colors.green, colors.blue));
-        
+
         if (max < threshold) {
             return "None (Too Dark)";
         }
-        
+
         // Check for GREEN
         // Green has high green value, low red and blue
         if (colors.green > colors.red && colors.green > colors.blue) {
@@ -91,20 +91,20 @@ public class ColorSensor extends LinearOpMode {
                 return "GREEN";
             }
         }
-        
+
         // Check for PURPLE
         // Purple has high red and blue, low green
         // Red and blue should be similar and both higher than green
         if (colors.red > colors.green && colors.blue > colors.green) {
             float redBlueAvg = (colors.red + colors.blue) / 2.0f;
             float redBlueDiff = Math.abs(colors.red - colors.blue);
-            
+
             // Red and blue should be close to each other and significantly higher than green
             if (redBlueDiff < 0.2f && redBlueAvg > colors.green * 1.5f) {
                 return "PURPLE";
             }
         }
-        
+
         return "None (No Match)";
     }
 }
