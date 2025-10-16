@@ -42,7 +42,7 @@ public class RobotTeleopModified extends LinearOpMode {
         backLeft.setDirection(DcMotor.Direction.FORWARD);
         rightServo.setDirection(DcMotorSimple.Direction.FORWARD);
         leftServo.setDirection(DcMotorSimple.Direction.REVERSE);
-        shooterMotor.setDirection(DcMotorSimple.Direction.FORWARD);
+        shooterMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
 
         // Set motor modes
