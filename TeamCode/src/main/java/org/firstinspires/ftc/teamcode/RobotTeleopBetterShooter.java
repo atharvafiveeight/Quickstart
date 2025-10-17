@@ -115,8 +115,8 @@ public class RobotTeleopBetterShooter extends LinearOpMode {
 
             // ========== LAUNCHER CONTROL WITH PID ==========
             // Detect right bumper press (edge detection)
-            boolean rightBumperPressed = gamepad1.right_bumper && !prevRightBumper;
-            prevRightBumper = gamepad1.right_bumper;
+            boolean rightBumperPressed = gamepad1.x && !prevRightBumper;
+            prevRightBumper = gamepad1.x;
 
             // Run the launch state machine
             launch(rightBumperPressed);
@@ -135,13 +135,18 @@ public class RobotTeleopBetterShooter extends LinearOpMode {
         stopAllMotors();
     }
 
+
     void launch(boolean shotRequested) {
+        telemetry.addData("shotRequested",1);
+
         switch (launchState) {
             case IDLE:
                 // When idle, stop the shooter
                 shooterMotor.setVelocity(STOP_SPEED);
                 if (shotRequested) {
                     launchState = LaunchState.SPIN_UP;
+                    telemetry.addData("changing to spinUp",1);
+
                 }
                 break;
 
