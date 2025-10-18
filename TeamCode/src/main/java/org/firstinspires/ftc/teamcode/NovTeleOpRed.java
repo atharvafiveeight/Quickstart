@@ -56,15 +56,15 @@ public class NovTeleOpRed extends LinearOpMode {
     // Anti-drift constants - these help prevent unwanted movement
     private static final double JOYSTICK_DEADZONE = 0.10; // Reduced deadzone for more responsiveness
     private static final double MIN_MOTOR_POWER = 0.12;   // Increased minimum power for more torque
-    private static final double DRIVE_POWER_MULTIPLIER = 0.8; // Power multiplier for speed control
+    private static final double DRIVE_POWER_MULTIPLIER = 1; // Power multiplier for speed control
     
     // Launcher constants - adjust these values for your robot
     private final double FEED_TIME_SECONDS = 0.05;        // How long to feed game pieces (reduced for single ball)
-    private final double FEED_DELAY_SECONDS = 1;        // Delay between feeds for continuous shooting (1 second)
+    private final double FEED_DELAY_SECONDS = 1.5;        // Delay between feeds for continuous shooting (1 second)
     private final double STOP_SPEED = 0.0;                // Stop speed for shooter
     private final double FULL_SPEED = 1.0;                // Full speed for servos
-    private final double LAUNCHER_TARGET_VELOCITY = 1125; // Target velocity for shooter
-    private final double LAUNCHER_MIN_VELOCITY = 1075;    // Minimum velocity before launching
+    private final double LAUNCHER_TARGET_VELOCITY = 1225; // Target velocity for shooter, baseline was 1125 change if needed
+    private final double LAUNCHER_MIN_VELOCITY = 1225;    // Minimum velocity before launching, baseline was 1075 change if needed
     
     // Field-oriented control is always enabled in this program
     private static final boolean FIELD_CENTRIC = true;
