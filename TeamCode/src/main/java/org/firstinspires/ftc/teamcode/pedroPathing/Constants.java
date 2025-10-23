@@ -19,7 +19,7 @@ public class Constants {
     public static FollowerConstants followerConstants = new FollowerConstants()
             .mass(8.30)
             .forwardZeroPowerAcceleration(-44.192939666537654)
-            .lateralZeroPowerAcceleration(-62.68202926514)
+            .lateralZeroPowerAcceleration(-62.68202926514 )
             .translationalPIDFCoefficients(new PIDFCoefficients(0.1,0,0.01,0))
             .headingPIDFCoefficients(new PIDFCoefficients(1,0,0.01,0))
             .drivePIDFCoefficients(new FilteredPIDFCoefficients(0.025,0,0.00001,0.6,0.01));
@@ -46,6 +46,11 @@ public class Constants {
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+    
+    // Launcher hardware names for autonomous routines
+    public static final String SHOOTER_MOTOR_NAME = "shooterMotor";
+    public static final String LEFT_SERVO_NAME = "leftServo";
+    public static final String RIGHT_SERVO_NAME = "rightServo";
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
                 .pathConstraints(pathConstraints)

@@ -56,15 +56,23 @@ public class NovTeleOpRed extends LinearOpMode {
     // Anti-drift constants - these help prevent unwanted movement
     private static final double JOYSTICK_DEADZONE = 0.10; // Reduced deadzone for more responsiveness
     private static final double MIN_MOTOR_POWER = 0.12;   // Increased minimum power for more torque
-    private static final double DRIVE_POWER_MULTIPLIER = 1; // Power multiplier for speed control
+    private static final double DRIVE_POWER_MULTIPLIER = 0.8; // Power multiplier for speed control
     
     // Launcher constants - adjust these values for your robot
     private final double FEED_TIME_SECONDS = 0.05;        // How long to feed game pieces (reduced for single ball)
     private final double FEED_DELAY_SECONDS = 1.5;        // Delay between feeds for continuous shooting (1 second)
     private final double STOP_SPEED = 0.0;                // Stop speed for shooter
     private final double FULL_SPEED = 1.0;                // Full speed for servos
-    private final double LAUNCHER_TARGET_VELOCITY = 1225; // Target velocity for shooter, baseline was 1125 change if needed
-    private final double LAUNCHER_MIN_VELOCITY = 1225;    // Minimum velocity before launching, baseline was 1075 change if needed
+    
+    // Short distance shooting (right bumper) - original values
+    private final double LAUNCHER_TARGET_VELOCITY = 1225; // Target velocity for shooter
+    private final double LAUNCHER_MIN_VELOCITY = 1225;    // Minimum velocity before launching
+    private final double LAUNCHER_POWER = 0.8;            // Motor power for short distance
+    
+    // Long distance shooting (left bumper) - higher values
+    private final double LONG_DISTANCE_TARGET_VELOCITY = 1600; // Higher velocity for long distance
+    private final double LONG_DISTANCE_MIN_VELOCITY = 1600;    // Higher minimum velocity
+    private final double LONG_DISTANCE_POWER = 0.95;           // Higher motor power for long distance
     
     // Field-oriented control is always enabled in this program
     private static final boolean FIELD_CENTRIC = true;
@@ -78,17 +86,26 @@ public class NovTeleOpRed extends LinearOpMode {
         CONTINUOUS   // Continuous shooting mode (bumper held)
     }
     
+    // Shooting mode tracking
+    private enum ShootingMode {
+        SHORT_DISTANCE,  // Right bumper - normal shooting
+        LONG_DISTANCE    // Left bumper - long distance shooting
+    }
+    
     private LaunchState launchState;
+    private ShootingMode currentShootingMode;
     private ElapsedTime feederTimer = new ElapsedTime();
     
     // Control variables for edge detection
     private boolean prevRightBumper = false;
+    private boolean prevLeftBumper = false;
 
     @Override
     public void runOpMode() throws InterruptedException {
         
         // Initialize launcher state machine
         launchState = LaunchState.IDLE;
+        currentShootingMode = ShootingMode.SHORT_DISTANCE; // Default to short distance
         
         // ========================================
         // STEP 1: SETUP BULK READING FOR SPEED
@@ -219,27 +236,49 @@ public class NovTeleOpRed extends LinearOpMode {
             // ========================================
             // STEP 6: PRE-WARM LAUNCHER SYSTEM
             // ========================================
-            // Detect right bumper press and hold
+            // Detect bumper presses and holds
             boolean rightBumperPressed = gamepad1.right_bumper && !prevRightBumper;
             boolean rightBumperHeld = gamepad1.right_bumper;
             boolean rightBumperReleased = !gamepad1.right_bumper && prevRightBumper;
             prevRightBumper = gamepad1.right_bumper;
             
-            // Manual pre-warm with X button
+            boolean leftBumperPressed = gamepad1.left_bumper && !prevLeftBumper;
+            boolean leftBumperHeld = gamepad1.left_bumper;
+            boolean leftBumperReleased = !gamepad1.left_bumper && prevLeftBumper;
+            prevLeftBumper = gamepad1.left_bumper;
+            
+            // Determine which bumper is being used and set shooting mode
+            boolean anyBumperPressed = rightBumperPressed || leftBumperPressed;
+            boolean anyBumperHeld = rightBumperHeld || leftBumperHeld;
+            boolean anyBumperReleased = rightBumperReleased || leftBumperReleased;
+            
+            // Set shooting mode based on which bumper is pressed
+            if (rightBumperPressed) {
+                currentShootingMode = ShootingMode.SHORT_DISTANCE;
+                telemetry.addData("DEBUG", "SHOOTING MODE: Short distance (right bumper)");
+            } else if (leftBumperPressed) {
+                currentShootingMode = ShootingMode.LONG_DISTANCE;
+                telemetry.addData("DEBUG", "SHOOTING MODE: Long distance (left bumper)");
+            }
+            
+            // Manual pre-warm with X button (uses current shooting mode)
             if (gamepad1.x) {
+                double targetVelocity = (currentShootingMode == ShootingMode.LONG_DISTANCE) ? 
+                    LONG_DISTANCE_TARGET_VELOCITY : LAUNCHER_TARGET_VELOCITY;
                 shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-                shooterMotor.setVelocity(LAUNCHER_TARGET_VELOCITY);
-                telemetry.addData("DEBUG", "MANUAL PRE-WARM: Setting velocity to " + LAUNCHER_TARGET_VELOCITY);
+                shooterMotor.setVelocity(targetVelocity);
+                telemetry.addData("DEBUG", "MANUAL PRE-WARM: Setting velocity to " + targetVelocity + 
+                    " (" + currentShootingMode.toString() + ")");
                 telemetry.addData("DEBUG", "MANUAL PRE-WARM: Current velocity: " + String.format("%.1f", shooterMotor.getVelocity()));
-            } else if (!rightBumperHeld && launchState == LaunchState.IDLE) {
-                // Only stop if not using bumper and in idle state
+            } else if (!anyBumperHeld && launchState == LaunchState.IDLE) {
+                // Only stop if not using any bumper and in idle state
                 shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
                 shooterMotor.setVelocity(0);
                 telemetry.addData("DEBUG", "STOPPING: Setting velocity to 0");
             }
             
             // Run the launch state machine
-            launch(rightBumperPressed, rightBumperReleased, rightBumperHeld);
+            launch(anyBumperPressed, anyBumperReleased, anyBumperHeld);
             
             // ========================================
             // STEP 7: GET JOYSTICK INPUT
@@ -317,14 +356,20 @@ public class NovTeleOpRed extends LinearOpMode {
     /**
      * Launcher state machine - controls the shooting sequence
      * This method handles the complete launch process from spin-up to feeding
+     * Now supports both short distance (right bumper) and long distance (left bumper) shooting
      * 
-     * @param shotRequested True when right bumper is pressed (edge detected)
-     * @param shotReleased True when right bumper is released (edge detected)
-     * @param bumperHeld True when right bumper is currently held down
+     * @param shotRequested True when any bumper is pressed (edge detected)
+     * @param shotReleased True when any bumper is released (edge detected)
+     * @param bumperHeld True when any bumper is currently held down
      */
     void launch(boolean shotRequested, boolean shotReleased, boolean bumperHeld) {
         // DEBUG: Log state machine transitions
         LaunchState previousState = launchState;
+        
+        // Get current target values based on shooting mode
+        double currentTargetVelocity = getCurrentTargetVelocity();
+        double currentMinVelocity = getCurrentMinVelocity();
+        double currentPower = getCurrentPower();
         
         switch (launchState) {
             case IDLE:
@@ -351,45 +396,47 @@ public class NovTeleOpRed extends LinearOpMode {
                 break;
 
             case SPIN_UP:
-                // Use power control with maximum limit of 70%
+                // Use power control based on shooting mode
                 shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-                shooterMotor.setPower(0.8); // 80% power maximum
+                shooterMotor.setPower(currentPower);
                 
                 // DEBUG: Log detailed hardware status
                 double currentVelocity = Math.abs(shooterMotor.getVelocity()); // Use absolute value
                 double shooterPower = shooterMotor.getPower();
                 telemetry.addData("DEBUG", "SPIN_UP: Motor mode: " + shooterMotor.getMode().toString());
-                telemetry.addData("DEBUG", "SPIN_UP: Setting power to 0.7 (70%)");
+                telemetry.addData("DEBUG", "SPIN_UP: Setting power to " + String.format("%.2f", currentPower) + 
+                    " (" + currentShootingMode.toString() + ")");
                 telemetry.addData("DEBUG", "SPIN_UP: Current velocity (abs): " + String.format("%.1f", currentVelocity));
                 telemetry.addData("DEBUG", "SPIN_UP: Shooter power: " + String.format("%.3f", shooterPower));
-                telemetry.addData("DEBUG", "SPIN_UP: Target velocity: " + LAUNCHER_TARGET_VELOCITY);
-                telemetry.addData("DEBUG", "SPIN_UP: Min velocity: " + LAUNCHER_MIN_VELOCITY);
+                telemetry.addData("DEBUG", "SPIN_UP: Target velocity: " + currentTargetVelocity);
+                telemetry.addData("DEBUG", "SPIN_UP: Min velocity: " + currentMinVelocity);
                 
                 // Check if velocity is close to target
-                double maxAllowedVelocity = LAUNCHER_TARGET_VELOCITY + 50; // 50 more than target
+                double maxAllowedVelocity = currentTargetVelocity + 50; // 50 more than target
                 if (currentVelocity > maxAllowedVelocity) {
                     telemetry.addData("DEBUG", "WARNING: Velocity too high (" + String.format("%.1f", currentVelocity) + "), max allowed: " + maxAllowedVelocity);
                 }
                 
-                // Trigger when velocity reaches target (1125) or higher
-                if (currentVelocity >= LAUNCHER_TARGET_VELOCITY) {
-                    telemetry.addData("DEBUG", "SPIN_UP -> LAUNCH: Target velocity reached! (" + String.format("%.1f", currentVelocity) + " >= " + LAUNCHER_TARGET_VELOCITY + ")");
+                // Trigger when velocity reaches target
+                if (currentVelocity >= currentTargetVelocity) {
+                    telemetry.addData("DEBUG", "SPIN_UP -> LAUNCH: Target velocity reached! (" + String.format("%.1f", currentVelocity) + " >= " + currentTargetVelocity + ")");
                     launchState = LaunchState.LAUNCH;
                 } else {
-                    telemetry.addData("DEBUG", "SPIN_UP: Waiting for target velocity... " + String.format("%.1f", currentVelocity) + " / " + LAUNCHER_TARGET_VELOCITY);
+                    telemetry.addData("DEBUG", "SPIN_UP: Waiting for target velocity... " + String.format("%.1f", currentVelocity) + " / " + currentTargetVelocity);
                 }
                 break;
 
             case LAUNCH:
                 // Maintain power control while feeding
                 shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-                shooterMotor.setPower(0.8); // 70% power
+                shooterMotor.setPower(currentPower);
                 
                 // Start feeding the game pieces
                 telemetry.addData("DEBUG", "LAUNCH -> LAUNCHING: Starting feeder servos");
                 telemetry.addData("DEBUG", "LAUNCH: Setting left servo to " + FULL_SPEED);
                 telemetry.addData("DEBUG", "LAUNCH: Setting right servo to " + FULL_SPEED);
-                telemetry.addData("DEBUG", "LAUNCH: Maintaining power: 0.7, velocity: " + String.format("%.1f", Math.abs(shooterMotor.getVelocity())));
+                telemetry.addData("DEBUG", "LAUNCH: Maintaining power: " + String.format("%.2f", currentPower) + 
+                    " (" + currentShootingMode.toString() + "), velocity: " + String.format("%.1f", Math.abs(shooterMotor.getVelocity())));
                 
                 leftServo.setPower(FULL_SPEED);
                 rightServo.setPower(FULL_SPEED);
@@ -408,12 +455,12 @@ public class NovTeleOpRed extends LinearOpMode {
                 double launchingVelocity = Math.abs(shooterMotor.getVelocity());
                 
                 // Limit motor power based on velocity to prevent going beyond target
-                if (launchingVelocity >= LAUNCHER_TARGET_VELOCITY) {
+                if (launchingVelocity >= currentTargetVelocity) {
                     // Reduce power if velocity is at or above target
-                    shooterMotor.setPower(0.5); // Reduce to 50% power
+                    shooterMotor.setPower(currentPower * 0.6); // Reduce to 60% of current power
                 } else {
                     // Use normal power if below target
-                    shooterMotor.setPower(0.8); // 80% power
+                    shooterMotor.setPower(currentPower);
                 }
                 
                 // Continue feeding for the specified time
@@ -421,7 +468,7 @@ public class NovTeleOpRed extends LinearOpMode {
                 telemetry.addData("DEBUG", "LAUNCHING: Feed time: " + String.format("%.2f", feedTime) + 
                                 " / Target: " + FEED_TIME_SECONDS);
                 telemetry.addData("DEBUG", "LAUNCHING: Velocity: " + String.format("%.1f", launchingVelocity) + 
-                                " / Target: " + LAUNCHER_TARGET_VELOCITY);
+                                " / Target: " + currentTargetVelocity + " (" + currentShootingMode.toString() + ")");
                 telemetry.addData("DEBUG", "LAUNCHING: Left servo power: " + String.format("%.3f", leftServo.getPower()));
                 telemetry.addData("DEBUG", "LAUNCHING: Right servo power: " + String.format("%.3f", rightServo.getPower()));
                 
@@ -450,26 +497,26 @@ public class NovTeleOpRed extends LinearOpMode {
                 double continuousVelocity = Math.abs(shooterMotor.getVelocity());
                 
                 // Limit motor power based on velocity to prevent going beyond target
-                if (continuousVelocity >= LAUNCHER_TARGET_VELOCITY) {
+                if (continuousVelocity >= currentTargetVelocity) {
                     // Reduce power if velocity is at or above target
-                    shooterMotor.setPower(0.5); // Reduce to 50% power
-                    telemetry.addData("DEBUG", "CONTINUOUS: Velocity at target, reducing power to 0.5");
+                    shooterMotor.setPower(currentPower * 0.6); // Reduce to 60% of current power
+                    telemetry.addData("DEBUG", "CONTINUOUS: Velocity at target, reducing power to " + String.format("%.2f", currentPower * 0.6));
                 } else {
                     // Use normal power if below target
-                    shooterMotor.setPower(0.8); // 80% power
-                    telemetry.addData("DEBUG", "CONTINUOUS: Below target velocity, using 0.8 power");
+                    shooterMotor.setPower(currentPower);
+                    telemetry.addData("DEBUG", "CONTINUOUS: Below target velocity, using " + String.format("%.2f", currentPower) + " power");
                 }
                 
                 // Continuous shooting mode - wait for velocity before each shot
                 double continuousTime = feederTimer.seconds();
                 telemetry.addData("DEBUG", "CONTINUOUS: Time since last feed: " + String.format("%.2f", continuousTime));
                 telemetry.addData("DEBUG", "CONTINUOUS: Current velocity: " + String.format("%.1f", continuousVelocity));
-                telemetry.addData("DEBUG", "CONTINUOUS: Target velocity: " + LAUNCHER_TARGET_VELOCITY);
+                telemetry.addData("DEBUG", "CONTINUOUS: Target velocity: " + currentTargetVelocity + " (" + currentShootingMode.toString() + ")");
                 telemetry.addData("DEBUG", "CONTINUOUS: Bumper held: " + bumperHeld);
                 
                 if (bumperHeld) {
                     // Check if it's time for next feed AND velocity is at target
-                    if (continuousTime > FEED_DELAY_SECONDS && continuousVelocity >= LAUNCHER_TARGET_VELOCITY) {
+                    if (continuousTime > FEED_DELAY_SECONDS && continuousVelocity >= currentTargetVelocity) {
                         // Time to feed another ball and velocity is ready
                         telemetry.addData("DEBUG", "CONTINUOUS -> LAUNCHING: Feeding next ball (velocity: " + String.format("%.1f", continuousVelocity) + ")");
                         leftServo.setPower(FULL_SPEED);
@@ -477,7 +524,7 @@ public class NovTeleOpRed extends LinearOpMode {
                         feederTimer.reset(); // Start timing the feed
                         launchState = LaunchState.LAUNCHING;
                     } else if (continuousTime > FEED_DELAY_SECONDS) {
-                        telemetry.addData("DEBUG", "CONTINUOUS: Waiting for target velocity... " + String.format("%.1f", continuousVelocity) + " / " + LAUNCHER_TARGET_VELOCITY);
+                        telemetry.addData("DEBUG", "CONTINUOUS: Waiting for target velocity... " + String.format("%.1f", continuousVelocity) + " / " + currentTargetVelocity);
                     } else {
                         telemetry.addData("DEBUG", "CONTINUOUS: Waiting for delay... " + String.format("%.2f", continuousTime) + " / " + FEED_DELAY_SECONDS);
                     }
@@ -495,6 +542,33 @@ public class NovTeleOpRed extends LinearOpMode {
         if (previousState != launchState) {
             telemetry.addData("DEBUG", "State changed: " + previousState.toString() + " -> " + launchState.toString());
         }
+    }
+    
+    /**
+     * Get current target velocity based on shooting mode
+     * @return Target velocity for current shooting mode
+     */
+    private double getCurrentTargetVelocity() {
+        return (currentShootingMode == ShootingMode.LONG_DISTANCE) ? 
+            LONG_DISTANCE_TARGET_VELOCITY : LAUNCHER_TARGET_VELOCITY;
+    }
+    
+    /**
+     * Get current minimum velocity based on shooting mode
+     * @return Minimum velocity for current shooting mode
+     */
+    private double getCurrentMinVelocity() {
+        return (currentShootingMode == ShootingMode.LONG_DISTANCE) ? 
+            LONG_DISTANCE_MIN_VELOCITY : LAUNCHER_MIN_VELOCITY;
+    }
+    
+    /**
+     * Get current motor power based on shooting mode
+     * @return Motor power for current shooting mode
+     */
+    private double getCurrentPower() {
+        return (currentShootingMode == ShootingMode.LONG_DISTANCE) ? 
+            LONG_DISTANCE_POWER : LAUNCHER_POWER;
     }
     
     /**
@@ -562,11 +636,14 @@ public class NovTeleOpRed extends LinearOpMode {
         // Launcher information
         telemetry.addLine("--- LAUNCHER STATUS ---");
         telemetry.addData("Launch State", launchState.toString());
+        telemetry.addData("Shooting Mode", currentShootingMode.toString());
         telemetry.addData("Shooter Velocity", String.format("%.1f", shooterMotor.getVelocity()));
-        telemetry.addData("Target Velocity", LAUNCHER_TARGET_VELOCITY);
-        telemetry.addData("Min Velocity", LAUNCHER_MIN_VELOCITY);
+        telemetry.addData("Target Velocity", getCurrentTargetVelocity() + " (" + currentShootingMode.toString() + ")");
+        telemetry.addData("Min Velocity", getCurrentMinVelocity());
         telemetry.addData("Right Bumper", gamepad1.right_bumper ? "PRESSED" : "RELEASED");
+        telemetry.addData("Left Bumper", gamepad1.left_bumper ? "PRESSED" : "RELEASED");
         telemetry.addData("Shooter Power", String.format("%.3f", shooterMotor.getPower()));
+        telemetry.addData("Target Power", String.format("%.2f", getCurrentPower()) + " (" + currentShootingMode.toString() + ")");
         telemetry.addData("Left Servo Power", String.format("%.3f", leftServo.getPower()));
         telemetry.addData("Right Servo Power", String.format("%.3f", rightServo.getPower()));
         telemetry.addData("Motor Mode", shooterMotor.getMode().toString());
@@ -578,7 +655,9 @@ public class NovTeleOpRed extends LinearOpMode {
         telemetry.addData("Left Stick Y", "Move Forward/Backward");
         telemetry.addData("Left Stick X", "Strafe Left/Right");
         telemetry.addData("Right Stick X", "Rotate Left/Right");
-        telemetry.addData("Right Bumper", "Launch Game Piece");
+        telemetry.addData("Right Bumper", "Short Distance Launch");
+        telemetry.addData("Left Bumper", "Long Distance Launch");
+        telemetry.addData("X Button", "Manual Pre-warm (current mode)");
         telemetry.addLine();
         
         // Performance information
