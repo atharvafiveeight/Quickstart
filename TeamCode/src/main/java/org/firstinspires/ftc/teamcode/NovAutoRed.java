@@ -55,45 +55,38 @@ public class NovAutoRed extends OpMode {
     private int ballsScored;
     private boolean scoringComplete;
     
-    // Define poses for the autonomous path (simplified)
+    // Define poses for the autonomous path (updated to match NovTeleOpRedSemiAuto.java)
     private final Pose startPose = new Pose(86.795, 134.575, Math.toRadians(0)); // Start position
-    private final Pose scorePose = new Pose(82.192, 97.534, Math.toRadians(40)); // Scoring position
+    private final Pose scorePose = new Pose(82.192, 97.534, Math.toRadians(40)); // Close range scoring position (from NovTeleOpRedSemiAuto.java)
     private final Pose startTeleopPose = new Pose(81.096, 38.795, Math.toRadians(0)); // Final park pose for teleop
 
     // Define path chains (simplified)
     private PathChain startToScore;
     private PathChain scoreToTeleop;
     
-    // Launcher constants (from NovTeleOpRed.java)
-    private final double FEED_TIME_SECONDS = 0.05;        // How long to feed each ball
-    private final double FEED_DELAY_SECONDS = 2;        // Delay between feeds
-    private final double FINAL_LAUNCH_DELAY = 2.00;        // Extra delay after last ball to ensure it launches
-    private final double FULL_SPEED = 1.0;                // Full speed for servos
-    private final double LAUNCHER_TARGET_VELOCITY = 1150; // Target velocity for shooter
-    private final double LAUNCHER_MIN_VELOCITY = 1075;    // Minimum velocity before launching
-    private final double LAUNCHER_VELOCITY_BUFFER = 50;   // Buffer above target velocity for first ball
+    // Launcher constants (updated from NovTeleOpRedSemiAuto.java)
+    private final double FEED_TIME_SECONDS = 0.05;        // How long to feed each ball (from NovTeleOpRedSemiAuto.java)
+    private final double FEED_DELAY_SECONDS = 1.5;        // Delay between feeds - reduced for better flow
+    private final double FINAL_LAUNCH_DELAY = 2.0;        // Extra delay after last ball to ensure it launches
+    private final double FULL_SPEED = 1.0;                // Full speed for servos (from NovTeleOpRedSemiAuto.java)
+    private final double STOP_SPEED = 0.0;                // Stop speed for servos (from NovTeleOpRedSemiAuto.java)
+    private final double LAUNCHER_TARGET_VELOCITY = 1400; // Target velocity for short distance (from NovTeleOpRedSemiAuto.java)
+    private final double LAUNCHER_MIN_VELOCITY = 1300;    // Minimum velocity for short distance (from NovTeleOpRedSemiAuto.java)
     private final int TOTAL_BALLS_TO_SCORE = 3;           // Number of balls to score per round
     
-    // Configurable power variables for launcher state machine
-    private double spinUpPower = 0.6;                     // Power during spin-up phase
-    private double launchingPower = 0.7;                  // Power during launching phase
-    private double launchingPowerReduced = 0.55;          // Reduced power when at target velocity
-    private double waitingPower = 0.6;                    // Power during waiting phase
-    private double waitingPowerReduced = 0.55;            // Reduced power when at target velocity
-    private double finalWaitPower = 0.6;                  // Power during final wait phase
-    private double finalWaitPowerReduced = 0.55;          // Reduced power when at target velocity
+    // REMOVED: Power-based control variables - now using setVelocity() method like NovTeleOpRedSemiAuto.java
     
     // Configurable drive speed for autonomous (0.0 to 1.0)
     private double autonomousDriveSpeed = 0.3;            // 30% speed for autonomous precision
     
-    // Launcher state machine (from NovTeleOpRed.java)
+    // Launcher state machine (updated from NovTeleOpRedSemiAuto.java with wait states)
     private enum LaunchState {
         IDLE,        // Shooter is stopped, waiting for launch command
         SPIN_UP,     // Shooter is spinning up to target velocity
         LAUNCH,      // Ready to launch, start feeding
         LAUNCHING,   // Currently feeding game pieces
-        WAITING,     // Waiting between shots
-        FINAL_WAIT   // Waiting for final ball to launch
+        WAITING,     // Waiting between shots for accuracy
+        FINAL_WAIT   // Waiting for final shot to complete before moving
     }
     
     private LaunchState launchState;
@@ -120,8 +113,7 @@ public class NovAutoRed extends OpMode {
         // Initialize launcher hardware
         initializeLauncherHardware();
         
-        // Configure launcher power variables (can be adjusted here)
-        configureLauncherPowers();
+        // REMOVED: configureLauncherPowers() - now using setVelocity() method like NovTeleOpRedSemiAuto.java
 
         // Build the autonomous paths
         buildAutonomousPaths();
@@ -228,31 +220,8 @@ public class NovAutoRed extends OpMode {
     }
     
     /**
-     * Configure launcher power variables and drive speed - adjust these values as needed
+     * REMOVED: configureLauncherPowers() method - now using setVelocity() method like NovTeleOpRedSemiAuto.java
      */
-    private void configureLauncherPowers() {
-        // Default power settings (can be adjusted here)
-        spinUpPower = 0.6;                     // Power during spin-up phase
-        launchingPower = 0.65;                  // Power during launching phase
-        launchingPowerReduced = 0.55;          // Reduced power when at target velocity
-        waitingPower = 0.6;                    // Power during waiting phase
-        waitingPowerReduced = 0.55;            // Reduced power when at target velocity
-        finalWaitPower = 0.6;                  // Power during final wait phase
-        finalWaitPowerReduced = 0.55;          // Reduced power when at target velocity
-        
-        // Drive speed for autonomous (0.0 to 1.0)
-        autonomousDriveSpeed = 0.7;            // 70% speed for autonomous precision
-        
-        telemetry.addData("DEBUG", "Launcher power configuration:");
-        telemetry.addData("DEBUG", "  Spin-up: " + spinUpPower);
-        telemetry.addData("DEBUG", "  Launching: " + launchingPower + " / " + launchingPowerReduced);
-        telemetry.addData("DEBUG", "  Waiting: " + waitingPower + " / " + waitingPowerReduced);
-        telemetry.addData("DEBUG", "  Final wait: " + finalWaitPower + " / " + finalWaitPowerReduced);
-        telemetry.addData("DEBUG", "  Autonomous drive speed: " + String.format("%.1f%%", autonomousDriveSpeed * 100));
-        telemetry.addData("DEBUG", "  Target velocity: " + LAUNCHER_TARGET_VELOCITY);
-        telemetry.addData("DEBUG", "  Velocity buffer: " + LAUNCHER_VELOCITY_BUFFER);
-        telemetry.addData("DEBUG", "  Required velocity: " + (LAUNCHER_TARGET_VELOCITY + LAUNCHER_VELOCITY_BUFFER));
-    }
     
     /**
      * Build the autonomous paths using pose definitions (simplified)
@@ -348,16 +317,16 @@ public class NovAutoRed extends OpMode {
                 // Scoring in progress - run launcher state machine
                 runLauncherStateMachine();
                 
-                // Check if all balls have been scored AND launcher is idle (final ball launched)
+                // Check if all balls have been scored AND launcher is idle (final ball launched and wait complete)
                 if (ballsScored >= TOTAL_BALLS_TO_SCORE && launchState == LaunchState.IDLE) {
-                    telemetry.addData("DEBUG", "All balls scored and launched: " + ballsScored + "/" + TOTAL_BALLS_TO_SCORE);
+                    telemetry.addData("DEBUG", "All balls scored and final shot complete: " + ballsScored + "/" + TOTAL_BALLS_TO_SCORE);
                     stopLauncher();
                     setScoringState(0);
                     scoringComplete = true;
-                    telemetry.addData("DEBUG", "Scoring round complete");
+                    telemetry.addData("DEBUG", "Scoring round complete - ready to move to end position");
                     
                 } else if (ballsScored >= TOTAL_BALLS_TO_SCORE) {
-                    telemetry.addData("DEBUG", "All balls scored, waiting for final launch. Launch state: " + launchState);
+                    telemetry.addData("DEBUG", "All balls scored, waiting for final shot to complete. Launch state: " + launchState);
                 }
                 break;
         }
@@ -365,143 +334,136 @@ public class NovAutoRed extends OpMode {
 
 
     /**
-     * Run the launcher state machine (adapted from NovTeleOpRed.java)
+     * Run the launcher state machine (updated from NovTeleOpRedSemiAuto.java)
      */
     private void runLauncherStateMachine() {
         switch (launchState) {
             case IDLE:
                 // Stop the shooter and servos
-                shooterMotor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
-                shooterMotor.setPower(0);
-                leftServo.setPower(0);
-                rightServo.setPower(0);
+                try {
+                    shooterMotor.setVelocity(0);
+                    leftServo.setPower(STOP_SPEED);
+                    rightServo.setPower(STOP_SPEED);
+                } catch (Exception e) {
+                    telemetry.addData("ERROR", "Failed to stop launcher: " + e.getMessage());
+                }
                 break;
 
             case SPIN_UP:
-                // Spin up the shooter motor with power control
-                shooterMotor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
-                shooterMotor.setPower(spinUpPower);
-                
-                // Check if velocity is at target with buffer for first ball
-                double currentVelocity = Math.abs(shooterMotor.getVelocity());
-                double requiredVelocity = LAUNCHER_TARGET_VELOCITY + LAUNCHER_VELOCITY_BUFFER;
-                if (currentVelocity >= requiredVelocity) {
-                    telemetry.addData("DEBUG", "Shooter at target velocity with buffer (" + String.format("%.1f", currentVelocity) + " >= " + String.format("%.1f", requiredVelocity) + "), ready to launch");
-                    launchState = LaunchState.LAUNCH;
-                } else {
-                    telemetry.addData("DEBUG", "Shooter velocity: " + String.format("%.1f", currentVelocity) + " (need " + String.format("%.1f", requiredVelocity) + ")");
+                // Spin up the shooter motor using setVelocity() method
+                try {
+                    shooterMotor.setVelocity(LAUNCHER_TARGET_VELOCITY);
+                    double currentVelocity = Math.abs(shooterMotor.getVelocity());
+                    
+                    // Use 95% of target velocity for more reliable launching
+                    double effectiveTargetVelocity = LAUNCHER_TARGET_VELOCITY * 0.95;
+                    
+                    if (currentVelocity >= effectiveTargetVelocity) {
+                        telemetry.addData("DEBUG", "Shooter at effective target velocity (" + String.format("%.1f", currentVelocity) + " >= " + String.format("%.1f", effectiveTargetVelocity) + "), ready to launch");
+                        launchState = LaunchState.LAUNCH;
+                    } else if (feederTimer.seconds() > 5.0) { // 5 second timeout
+                        launchState = LaunchState.LAUNCH;
+                        telemetry.addData("DEBUG", "Spin-up timeout - forcing launch (current: " + String.format("%.1f", currentVelocity) + ", target: " + String.format("%.1f", LAUNCHER_TARGET_VELOCITY) + ")");
+                    } else {
+                        telemetry.addData("DEBUG", "Still spinning up... (" + String.format("%.1f", currentVelocity) + "/" + String.format("%.1f", effectiveTargetVelocity) + " effective target)");
+                    }
+                } catch (Exception e) {
+                    telemetry.addData("ERROR", "setVelocity() failed: " + e.getMessage());
+                    launchState = LaunchState.IDLE;
                 }
                 break;
 
             case LAUNCH:
-                // Maintain power control while feeding
-                shooterMotor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
-                shooterMotor.setPower(launchingPower);
-                
                 // Start feeding the ball
-                leftServo.setPower(FULL_SPEED);
-                rightServo.setPower(FULL_SPEED);
-                feederTimer.reset();
-                launchState = LaunchState.LAUNCHING;
-                telemetry.addData("DEBUG", "Feeding ball " + (ballsScored + 1));
+                try {
+                    leftServo.setPower(FULL_SPEED);
+                    rightServo.setPower(FULL_SPEED);
+                    feederTimer.reset();
+                    launchState = LaunchState.LAUNCHING;
+                    telemetry.addData("DEBUG", "Feeding ball " + (ballsScored + 1));
+                } catch (Exception e) {
+                    telemetry.addData("ERROR", "Failed to start feeding: " + e.getMessage());
+                    launchState = LaunchState.IDLE;
+                }
                 break;
 
             case LAUNCHING:
-                // Maintain power control while feeding with velocity limiting
-                shooterMotor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
-                double launchingVelocity = Math.abs(shooterMotor.getVelocity());
-                
-                // Limit motor power based on velocity to prevent going beyond target
-                if (launchingVelocity >= LAUNCHER_TARGET_VELOCITY) {
-                    // Reduce power if velocity is at or above target
-                    shooterMotor.setPower(launchingPowerReduced);
-                } else {
-                    // Use normal power if below target
-                    shooterMotor.setPower(launchingPower);
-                }
-                
                 // Continue feeding for the specified time
                 if (feederTimer.seconds() > FEED_TIME_SECONDS) {
-                    // Ball fed, stop servos and wait
-                    leftServo.setPower(0);
-                    rightServo.setPower(0);
-                    ballsScored++;
-                    
-                    // Send essential telemetry to Panels - velocity when ball was shot and robot position
-                    telemetryM.addData("Ball " + ballsScored + " Launch Velocity", String.format("%.1f", launchingVelocity));
-                    telemetryM.addData("Ball " + ballsScored + " Position", String.format("(%.2f, %.2f)", follower.getPose().getX(), follower.getPose().getY()));
-                    telemetryM.addData("Ball " + ballsScored + " Heading", String.format("%.1f°", Math.toDegrees(follower.getPose().getHeading())));
-                    
-                    telemetry.addData("DEBUG", "Ball " + ballsScored + " launched at velocity " + String.format("%.1f", launchingVelocity));
-                    
-                    // Wait before next shot
-                    feederTimer.reset();
-                    launchState = LaunchState.WAITING;
-                }
-                break;
-                
-            case WAITING:
-                // Maintain power control while waiting between shots
-                shooterMotor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
-                double waitingVelocity = Math.abs(shooterMotor.getVelocity());
-                
-                // Limit motor power based on velocity to prevent going beyond target
-                if (waitingVelocity >= LAUNCHER_TARGET_VELOCITY) {
-                    // Reduce power if velocity is at or above target
-                    shooterMotor.setPower(waitingPowerReduced);
-                } else {
-                    // Use normal power if below target
-                    shooterMotor.setPower(waitingPower);
-                }
-                
-                // Wait between shots
-                if (feederTimer.seconds() > FEED_DELAY_SECONDS) {
-                    // Check if this was the last ball
-                    if (ballsScored >= TOTAL_BALLS_TO_SCORE) {
-                        // This was the last ball, wait extra time for it to launch
-                        feederTimer.reset();
-                        launchState = LaunchState.FINAL_WAIT;
-                        telemetry.addData("DEBUG", "Last ball launched, waiting for final launch at velocity " + String.format("%.1f", waitingVelocity));
-                    } else {
-                        // Ready for next shot
-                        launchState = LaunchState.LAUNCH;
+                    // Ball fed, stop servos and motor
+                    try {
+                        leftServo.setPower(STOP_SPEED);
+                        rightServo.setPower(STOP_SPEED);
+                        shooterMotor.setVelocity(0); // Stop the motor
+                        
+                        ballsScored++;
+                        double launchingVelocity = Math.abs(shooterMotor.getVelocity());
+                        
+                        // Send essential telemetry to Panels - velocity when ball was shot and robot position
+                        telemetryM.addData("Ball " + ballsScored + " Launch Velocity", String.format("%.1f", launchingVelocity));
+                        telemetryM.addData("Ball " + ballsScored + " Position", String.format("(%.2f, %.2f)", follower.getPose().getX(), follower.getPose().getY()));
+                        telemetryM.addData("Ball " + ballsScored + " Heading", String.format("%.1f°", Math.toDegrees(follower.getPose().getHeading())));
+                        
+                        telemetry.addData("DEBUG", "Ball " + ballsScored + " launched at velocity " + String.format("%.1f", launchingVelocity));
+                        
+                        // Check if this was the last ball
+                        if (ballsScored >= TOTAL_BALLS_TO_SCORE) {
+                            // All balls launched, wait for final shot to complete before moving
+                            feederTimer.reset();
+                            launchState = LaunchState.FINAL_WAIT;
+                            telemetry.addData("DEBUG", "Final ball launched, waiting " + FINAL_LAUNCH_DELAY + " seconds for shot to complete");
+                        } else {
+                            // Wait before next shot for accuracy
+                            feederTimer.reset();
+                            launchState = LaunchState.WAITING;
+                            telemetry.addData("DEBUG", "Ball " + ballsScored + " launched, waiting " + FEED_DELAY_SECONDS + " seconds before next shot");
+                        }
+                    } catch (Exception e) {
+                        telemetry.addData("ERROR", "Failed to complete launch: " + e.getMessage());
+                        launchState = LaunchState.IDLE;
                     }
                 }
                 break;
                 
-            case FINAL_WAIT:
-                // Maintain power control while waiting for final ball to launch
-                shooterMotor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
-                double finalWaitVelocity = Math.abs(shooterMotor.getVelocity());
-                
-                // Limit motor power based on velocity to prevent going beyond target
-                if (finalWaitVelocity >= LAUNCHER_TARGET_VELOCITY) {
-                    // Reduce power if velocity is at or above target
-                    shooterMotor.setPower(finalWaitPowerReduced);
+            case WAITING:
+                // Wait between shots for accuracy
+                if (feederTimer.seconds() > FEED_DELAY_SECONDS) {
+                    // Wait time complete, spin up for next shot
+                    launchState = LaunchState.SPIN_UP;
+                    feederTimer.reset();
+                    telemetry.addData("DEBUG", "Wait complete, spinning up for ball " + (ballsScored + 1));
                 } else {
-                    // Use normal power if below target
-                    shooterMotor.setPower(finalWaitPower);
+                    double remainingWait = FEED_DELAY_SECONDS - feederTimer.seconds();
+                    telemetry.addData("DEBUG", "Waiting between shots: " + String.format("%.1f", remainingWait) + " seconds remaining");
                 }
+                break;
                 
-                // Wait extra time for final ball to launch
+            case FINAL_WAIT:
+                // Wait for final shot to complete before moving to end position
                 if (feederTimer.seconds() > FINAL_LAUNCH_DELAY) {
-                    // Final ball should be launched now
+                    // Final shot should be complete, go to idle
                     launchState = LaunchState.IDLE;
-                    telemetry.addData("DEBUG", "Final ball launch complete at velocity " + String.format("%.1f", finalWaitVelocity));
+                    telemetry.addData("DEBUG", "Final shot complete, all balls launched successfully");
+                } else {
+                    double remainingWait = FINAL_LAUNCH_DELAY - feederTimer.seconds();
+                    telemetry.addData("DEBUG", "Waiting for final shot to complete: " + String.format("%.1f", remainingWait) + " seconds remaining");
                 }
                 break;
         }
     }
 
     /**
-     * Stop all launcher hardware
+     * Stop all launcher hardware (updated to use setVelocity() method)
      */
     private void stopLauncher() {
-        shooterMotor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
-        shooterMotor.setPower(0);
-        leftServo.setPower(0);
-        rightServo.setPower(0);
-        launchState = LaunchState.IDLE;
+        try {
+            shooterMotor.setVelocity(0);
+            leftServo.setPower(STOP_SPEED);
+            rightServo.setPower(STOP_SPEED);
+            launchState = LaunchState.IDLE;
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to stop launcher: " + e.getMessage());
+        }
     }
 
     /**
@@ -644,12 +606,20 @@ public class NovAutoRed extends OpMode {
         telemetry.addData("Right Servo Power", String.format("%.3f", rightServo.getPower()));
         telemetry.addLine();
         
-        // Launcher power configuration
-        telemetry.addLine("--- LAUNCHER POWER CONFIG ---");
-        telemetry.addData("Spin-up Power", String.format("%.3f", spinUpPower));
-        telemetry.addData("Launching Power", String.format("%.3f / %.3f", launchingPower, launchingPowerReduced));
-        telemetry.addData("Waiting Power", String.format("%.3f / %.3f", waitingPower, waitingPowerReduced));
-        telemetry.addData("Final Wait Power", String.format("%.3f / %.3f", finalWaitPower, finalWaitPowerReduced));
+        // Launcher velocity configuration (updated from NovTeleOpRedSemiAuto.java)
+        telemetry.addLine("--- LAUNCHER VELOCITY CONFIG ---");
+        telemetry.addData("Target Velocity", LAUNCHER_TARGET_VELOCITY);
+        telemetry.addData("Min Velocity", LAUNCHER_MIN_VELOCITY);
+        telemetry.addData("Control Method", "setVelocity() (from NovTeleOpRedSemiAuto.java)");
+        telemetry.addData("Effective Target", String.format("%.1f", LAUNCHER_TARGET_VELOCITY * 0.95));
+        telemetry.addLine();
+        
+        // Launcher timing configuration (updated for accuracy)
+        telemetry.addLine("--- LAUNCHER TIMING CONFIG ---");
+        telemetry.addData("Feed Time", String.format("%.3f seconds", FEED_TIME_SECONDS));
+        telemetry.addData("Wait Between Shots", String.format("%.1f seconds", FEED_DELAY_SECONDS));
+        telemetry.addData("Final Launch Delay", String.format("%.1f seconds", FINAL_LAUNCH_DELAY));
+        telemetry.addData("Total Balls", TOTAL_BALLS_TO_SCORE);
         telemetry.addLine();
         
         // Timing information

@@ -118,7 +118,7 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     
     private ShootingMode currentShootingMode;
     
-    // Preset locations for panel integration
+    // Preset locations for semiauto integration
     private final Pose closeRangePose = new Pose(82.192, 97.534, Math.toRadians(40)); // Close range scoring
     private final Pose longRangePose = new Pose(80.219, 19.288, Math.toRadians(64));  // Long range scoring
     private final Pose homePose = new Pose(18.192, 18.411, Math.toRadians(180));      // Home position
