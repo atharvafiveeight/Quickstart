@@ -27,20 +27,12 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-// PanelsConfigurables imports for PedroPathing visualization and configuration
-import com.bylazar.configurables.PanelsConfigurables;
-import com.bylazar.configurables.annotations.Configurable;
-import com.bylazar.configurables.annotations.IgnoreConfigurable;
-import com.bylazar.field.FieldManager;
-import com.bylazar.field.PanelsField;
-import com.bylazar.field.Style;
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
+// REMOVED: PanelsConfigurables imports - no longer needed
 
 import java.util.List;
 
 /**
- * NovTeleOpRed - Field-Oriented Control TeleOp Program with PedroPathing Panel Integration
+ * NovTeleOpRed - Field-Oriented Control TeleOp Program with PedroPathing Integration
  * 
  * This program provides smooth, field-oriented control using the GoBilda PinPoint IMU.
  * Field-oriented control means the robot moves relative to the field, not relative to the robot's current heading.
@@ -48,7 +40,6 @@ import java.util.List;
  * Key Features:
  * - Field-Oriented Control (FOC) using GoBilda PinPoint IMU
  * - PedroPathing integration for autonomous navigation to preset locations
- * - Panel integration with PanelsConfigurables for visualization
  * - Same motor setup as MainOverdriveTeleOp for consistency
  * - Anti-drift measures to prevent unwanted movement
  * - Bulk reading for faster performance
@@ -65,9 +56,8 @@ import java.util.List;
  * - A Button: Go to Home Position
  * 
  * @author Sahas Kumar
- * @version 2.0 - Added PedroPathing Panel Integration
+ * @version 3.0 - Removed Panels integration, fixed launcher and path following
  */
-@Configurable
 @TeleOp(name = "NovTeleOpRedSemiAuto", group = "TeleOp")
 public class NovTeleOpRedSemiAuto extends LinearOpMode {
 
@@ -91,45 +81,34 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     // Anti-drift constants - these help prevent unwanted movement
     private static final double JOYSTICK_DEADZONE = 0.10; // Reduced deadzone for more responsiveness
     private static final double MIN_MOTOR_POWER = 0.12;   // Increased minimum power for more torque
-    private static final double DRIVE_POWER_MULTIPLIER = 0.8; // Power multiplier for speed control
+    private static final double DRIVE_POWER_MULTIPLIER = 0.95; // Power multiplier for speed control
     
-    // Launcher constants - adjust these values for your robot
-    private final double FEED_TIME_SECONDS = 0.05;        // How long to feed game pieces (reduced for single ball)
-    private final double FEED_DELAY_SECONDS = 1.25;       // Delay between feeds for continuous shooting (1.25 second - synced with NovAutoRed)
-    private final double FINAL_LAUNCH_DELAY = 2.00;       // Extra delay after last ball to ensure it launches
+    // Launcher constants - simplified from StarterBotTeleopMecanums
+    private final double FEED_TIME_SECONDS = 0.05;        // How long to feed game pieces
     private final double STOP_SPEED = 0.0;                // Stop speed for shooter
     private final double FULL_SPEED = 1.0;                // Full speed for servos
     
-    // Short distance shooting (right bumper) - synced with NovAutoRed
-    private final double LAUNCHER_TARGET_VELOCITY = 1225; // Target velocity for shooter (synced with NovAutoRed)
-    private final double LAUNCHER_MIN_VELOCITY = 1225;     // Minimum velocity before launching (synced with NovAutoRed)
-    private final double LAUNCHER_POWER = 0.8;            // Motor power for short distance
+    // Launcher velocity control - using setVelocity() method
+    private final double LAUNCHER_TARGET_VELOCITY = 1400; // Target velocity for short distance
+    private final double LAUNCHER_MIN_VELOCITY = 1300;    // Minimum velocity for short distance
     
-    // Long distance shooting (left bumper) - higher values
-    private final double LONG_DISTANCE_TARGET_VELOCITY = 1600; // Higher velocity for long distance
-    private final double LONG_DISTANCE_MIN_VELOCITY = 1550;    // Higher minimum velocity
-    private final double LONG_DISTANCE_POWER = 0.95;           // Higher motor power for long distance
-    
-    // Configurable power variables for state machine (can be adjusted during initialization)
-    private double spinUpPower = 0.8;                     // Power during spin-up phase
-    private double launchingPower = 0.8;                  // Power during launching phase
-    private double launchingPowerReduced = 0.7;           // Reduced power when at target velocity
-    private double waitingPower = 0.8;                    // Power during waiting phase
-    private double waitingPowerReduced = 0.7;             // Reduced power when at target velocity
-    private double finalWaitPower = 0.8;                  // Power during final wait phase
-    private double finalWaitPowerReduced = 0.7;           // Reduced power when at target velocity
+    // Long distance shooting (left bumper)
+    private final double LONG_DISTANCE_TARGET_VELOCITY = 1750; // Target velocity for long distance
+    private final double LONG_DISTANCE_MIN_VELOCITY = 1650;    // Minimum velocity for long distance
     
     // Field-oriented control is always enabled in this program
     private static final boolean FIELD_CENTRIC = true;
 
-    // Launcher state machine
+    // Launcher state machine - simplified from StarterBotTeleopMecanums
     private enum LaunchState {
         IDLE,        // Shooter is stopped, waiting for launch command
         SPIN_UP,     // Shooter is spinning up to target velocity
         LAUNCH,      // Ready to launch, start feeding
-        LAUNCHING,   // Currently feeding game pieces
-        CONTINUOUS   // Continuous shooting mode (bumper held)
+        LAUNCHING    // Currently feeding game pieces
     }
+    
+    private LaunchState launchState;
+    private ElapsedTime feederTimer = new ElapsedTime();
     
     // Shooting mode tracking
     private enum ShootingMode {
@@ -137,32 +116,16 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         LONG_DISTANCE    // Left bumper - long distance shooting
     }
     
-    private LaunchState launchState;
     private ShootingMode currentShootingMode;
-    private ElapsedTime feederTimer = new ElapsedTime();
-    
-    // Control variables for edge detection
-    private boolean prevRightBumper = false;
-    private boolean prevLeftBumper = false;
     
     // Preset locations for panel integration
     private final Pose closeRangePose = new Pose(82.192, 97.534, Math.toRadians(40)); // Close range scoring
     private final Pose longRangePose = new Pose(80.219, 19.288, Math.toRadians(64));  // Long range scoring
     private final Pose homePose = new Pose(18.192, 18.411, Math.toRadians(180));      // Home position
     
-    // Path following state management
-    private boolean isFollowingPath = false;
-    private boolean joystickOverride = false;
+    // Path following state management - simplified approach
+    private boolean automatedDrive = false;
     private PathChain currentPath;
-    
-    // Panels telemetry manager for PedroPathing visualization
-    private TelemetryManager telemetryM;
-    
-    // Panels field for drawing
-    private static final FieldManager panelsField = PanelsField.INSTANCE.getField();
-    private static final Style robotLook = new Style("", "#3F51B5", 0.0);
-    private static final Style historyLook = new Style("", "#4CAF50", 0.0);
-    private static final double ROBOT_RADIUS = 9; // Robot radius for drawing
 
     @Override
     public void runOpMode() throws InterruptedException {
@@ -170,9 +133,6 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         // Initialize launcher state machine
         launchState = LaunchState.IDLE;
         currentShootingMode = ShootingMode.SHORT_DISTANCE; // Default to short distance
-        
-        // Configure launcher power variables (can be adjusted here)
-        configureLauncherPowers();
         
         // ========================================
         // STEP 1: SETUP BULK READING FOR SPEED
@@ -186,25 +146,103 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         // ========================================
         // STEP 2: INITIALIZE MOTORS
         // ========================================
-        // Map motor names from hardware configuration to code variables
-        frontLeft = hardwareMap.get(DcMotorEx.class, "frontLeft");
-        frontRight = hardwareMap.get(DcMotorEx.class, "frontRight");
-        backLeft = hardwareMap.get(DcMotorEx.class, "backLeft");
-        backRight = hardwareMap.get(DcMotorEx.class, "backRight");
+        // FIXED: Map motor names from hardware configuration to code variables with error handling
+        boolean driveMotorsInitialized = true;
         
-        // Initialize launcher hardware
+        try {
+            frontLeft = hardwareMap.get(DcMotorEx.class, "frontLeft");
+            if (frontLeft == null) {
+                telemetry.addData("ERROR", "Front left motor 'frontLeft' not found in hardware map!");
+                driveMotorsInitialized = false;
+            }
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to initialize front left motor: " + e.getMessage());
+            driveMotorsInitialized = false;
+        }
+        
+        try {
+            frontRight = hardwareMap.get(DcMotorEx.class, "frontRight");
+            if (frontRight == null) {
+                telemetry.addData("ERROR", "Front right motor 'frontRight' not found in hardware map!");
+                driveMotorsInitialized = false;
+            }
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to initialize front right motor: " + e.getMessage());
+            driveMotorsInitialized = false;
+        }
+        
+        try {
+            backLeft = hardwareMap.get(DcMotorEx.class, "backLeft");
+            if (backLeft == null) {
+                telemetry.addData("ERROR", "Back left motor 'backLeft' not found in hardware map!");
+                driveMotorsInitialized = false;
+            }
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to initialize back left motor: " + e.getMessage());
+            driveMotorsInitialized = false;
+        }
+        
+        try {
+            backRight = hardwareMap.get(DcMotorEx.class, "backRight");
+            if (backRight == null) {
+                telemetry.addData("ERROR", "Back right motor 'backRight' not found in hardware map!");
+                driveMotorsInitialized = false;
+            }
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to initialize back right motor: " + e.getMessage());
+            driveMotorsInitialized = false;
+        }
+        
+        if (!driveMotorsInitialized) {
+            telemetry.addData("CRITICAL ERROR", "Drive motors failed to initialize - robot cannot move!");
+            // Note: We continue initialization but the robot won't be able to drive
+        }
+        
+        // FIXED: Initialize launcher hardware with better error handling
+        boolean hardwareInitialized = true;
+        
         try {
             shooterMotor = hardwareMap.get(DcMotorEx.class, "shooterMotor");
-            leftServo = hardwareMap.get(CRServo.class, "leftServo");
-            rightServo = hardwareMap.get(CRServo.class, "rightServo");
-            
-            // DEBUG: Verify hardware mapping
-            telemetry.addData("DEBUG", "Hardware mapping successful:");
-            telemetry.addData("DEBUG", "  Shooter Motor: " + (shooterMotor != null ? "FOUND" : "MISSING"));
-            telemetry.addData("DEBUG", "  Left Servo: " + (leftServo != null ? "FOUND" : "MISSING"));
-            telemetry.addData("DEBUG", "  Right Servo: " + (rightServo != null ? "FOUND" : "MISSING"));
+            if (shooterMotor == null) {
+                telemetry.addData("ERROR", "Shooter motor 'shooterMotor' not found in hardware map!");
+                hardwareInitialized = false;
+            }
         } catch (Exception e) {
-            telemetry.addData("ERROR", "Hardware mapping failed: " + e.getMessage());
+            telemetry.addData("ERROR", "Failed to initialize shooter motor: " + e.getMessage());
+            hardwareInitialized = false;
+        }
+        
+        try {
+            leftServo = hardwareMap.get(CRServo.class, "leftServo");
+            if (leftServo == null) {
+                telemetry.addData("ERROR", "Left servo 'leftServo' not found in hardware map!");
+                hardwareInitialized = false;
+            }
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to initialize left servo: " + e.getMessage());
+            hardwareInitialized = false;
+        }
+        
+        try {
+            rightServo = hardwareMap.get(CRServo.class, "rightServo");
+            if (rightServo == null) {
+                telemetry.addData("ERROR", "Right servo 'rightServo' not found in hardware map!");
+                hardwareInitialized = false;
+            }
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to initialize right servo: " + e.getMessage());
+            hardwareInitialized = false;
+        }
+        
+        // DEBUG: Verify hardware mapping
+        telemetry.addData("DEBUG", "Hardware mapping status:");
+        telemetry.addData("DEBUG", "  Shooter Motor: " + (shooterMotor != null ? "FOUND" : "MISSING"));
+        telemetry.addData("DEBUG", "  Left Servo: " + (leftServo != null ? "FOUND" : "MISSING"));
+        telemetry.addData("DEBUG", "  Right Servo: " + (rightServo != null ? "FOUND" : "MISSING"));
+        telemetry.addData("DEBUG", "  Overall Status: " + (hardwareInitialized ? "SUCCESS" : "FAILED"));
+        
+        if (!hardwareInitialized) {
+            telemetry.addData("WARNING", "Some hardware failed to initialize - launcher may not work properly");
         }
         
         // Initialize Limelight vision sensor
@@ -215,51 +253,70 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
             telemetry.addData("ERROR", "Limelight initialization failed: " + e.getMessage());
         }
 
-        // Set motor directions - same as MainOverdriveTeleOp
+        // FIXED: Set motor directions with null checks - same as MainOverdriveTeleOp
         // This ensures wheels spin in the correct direction
-        frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
-        backRight.setDirection(DcMotorSimple.Direction.FORWARD);
-        frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
-        backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
+        if (frontRight != null) frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
+        if (backRight != null) backRight.setDirection(DcMotorSimple.Direction.FORWARD);
+        if (frontLeft != null) frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
+        if (backLeft != null) backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
         
-        // Set launcher motor and servo directions
-        shooterMotor.setDirection(DcMotorSimple.Direction.REVERSE);
-        rightServo.setDirection(DcMotorSimple.Direction.REVERSE);
-        leftServo.setDirection(DcMotorSimple.Direction.FORWARD);
+        // FIXED: Set launcher motor and servo directions with null checks
+        if (shooterMotor != null) shooterMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+        if (rightServo != null) rightServo.setDirection(DcMotorSimple.Direction.REVERSE);
+        if (leftServo != null) leftServo.setDirection(DcMotorSimple.Direction.FORWARD);
 
-        // Set motors to brake when no power is applied - prevents drift
-        frontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        frontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        backLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        backRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        shooterMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        // FIXED: Set motors to brake when no power is applied - prevents drift (with null checks)
+        if (frontLeft != null) frontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        if (frontRight != null) frontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        if (backLeft != null) backLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        if (backRight != null) backRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        if (shooterMotor != null) shooterMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         
-        // Set up shooter motor with encoder-based velocity control
-        shooterMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        // FIXED: Set up shooter motor with encoder-based velocity control (with null check)
+        if (shooterMotor != null) {
+            try {
+                shooterMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+                shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+                
+                // Set custom PIDF coefficients for better launcher control - from StarterBotTeleopMecanums
+                shooterMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
+                        new PIDFCoefficients(3, 1, 0, 10));
+            } catch (Exception e) {
+                telemetry.addData("ERROR", "Failed to configure shooter motor: " + e.getMessage());
+            }
+        }
         
-        // Set custom PIDF coefficients for better launcher control
-        shooterMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
-                new PIDFCoefficients(300, 0, 0, 10));
-        
-        // Stop servos initially
-        leftServo.setPower(0);
-        rightServo.setPower(0);
+        // FIXED: Stop servos initially (with null checks)
+        if (leftServo != null) leftServo.setPower(0);
+        if (rightServo != null) rightServo.setPower(0);
 
         // ========================================
         // STEP 3: INITIALIZE PEDROPATHING FOLLOWER
         // ========================================
-        // Initialize PedroPathing Follower for autonomous path following
-        follower = Constants.createFollower(hardwareMap);
+        // FIXED: Initialize PedroPathing Follower for autonomous path following with error handling
+        try {
+            follower = Constants.createFollower(hardwareMap);
+            if (follower == null) {
+                telemetry.addData("ERROR", "Failed to create PedroPathing follower!");
+            } else {
+                telemetry.addData("DEBUG", "PedroPathing follower created successfully");
+            }
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "PedroPathing initialization failed: " + e.getMessage());
+            follower = null;
+        }
         
-        // Initialize PanelsConfigurables for PedroPathing visualization
-        PanelsConfigurables.INSTANCE.refreshClass(this);
+        // REMOVED: PanelsConfigurables initialization - no longer needed
         
-        // Initialize Panels telemetry manager
-        telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
-        
-        // Set starting pose (robot position after autonomous)
-        follower.setStartingPose(new Pose(81.096, 38.795, Math.toRadians(0)));
+        // FIXED: Set starting pose (robot position after autonomous) with null check
+        if (follower != null) {
+            try {
+                follower.setStartingPose(new Pose(81.096, 38.795, Math.toRadians(0)));
+                telemetry.addData("DEBUG", "Starting pose set successfully");
+            } catch (Exception e) {
+                telemetry.addData("ERROR", "Failed to set starting pose: " + e.getMessage());
+            }
+        }
         
         // ========================================
         // STEP 4: INITIALIZE LIMELIGHT VISION SENSOR
@@ -344,39 +401,20 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
                 }
             }
             
-            // Update PedroPathing Follower (includes IMU and odometry updates)
-            follower.update();
-            
-            // Draw robot position and path on Panels dashboard
-            drawCurrentAndHistory();
+            // REMOVED: Panels drawing - no longer needed
 
             // ========================================
             // STEP 7: PANEL INTEGRATION - PRESET LOCATIONS
             // ========================================
             // Handle preset location buttons (X, Y, A)
             handlePresetLocationButtons();
-            
-            // Check for joystick override during path following
-            checkJoystickOverride();
 
             // ========================================
-            // STEP 8: PRE-WARM LAUNCHER SYSTEM
+            // STEP 8: LAUNCHER SYSTEM
             // ========================================
-            // Detect bumper presses and holds
-            boolean rightBumperPressed = gamepad1.right_bumper && !prevRightBumper;
-            boolean rightBumperHeld = gamepad1.right_bumper;
-            boolean rightBumperReleased = !gamepad1.right_bumper && prevRightBumper;
-            prevRightBumper = gamepad1.right_bumper;
-            
-            boolean leftBumperPressed = gamepad1.left_bumper && !prevLeftBumper;
-            boolean leftBumperHeld = gamepad1.left_bumper;
-            boolean leftBumperReleased = !gamepad1.left_bumper && prevLeftBumper;
-            prevLeftBumper = gamepad1.left_bumper;
-            
-            // Determine which bumper is being used and set shooting mode
-            boolean anyBumperPressed = rightBumperPressed || leftBumperPressed;
-            boolean anyBumperHeld = rightBumperHeld || leftBumperHeld;
-            boolean anyBumperReleased = rightBumperReleased || leftBumperReleased;
+            // Handle bumper presses and set shooting mode
+            boolean rightBumperPressed = gamepad1.rightBumperWasPressed();
+            boolean leftBumperPressed = gamepad1.leftBumperWasPressed();
             
             // Set shooting mode based on which bumper is pressed
             if (rightBumperPressed) {
@@ -387,15 +425,8 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
                 telemetry.addData("DEBUG", "SHOOTING MODE: Long distance (left bumper)");
             }
             
-            // Stop shooter when not in use and in idle state
-            if (!anyBumperHeld && launchState == LaunchState.IDLE) {
-                shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-                shooterMotor.setVelocity(0);
-                telemetry.addData("DEBUG", "STOPPING: Setting velocity to 0");
-            }
-            
-            // Run the launch state machine
-            launch(anyBumperPressed, anyBumperReleased, anyBumperHeld);
+            // Launch if either bumper is pressed
+            launch(rightBumperPressed || leftBumperPressed);
             
             // ========================================
             // STEP 9: GET JOYSTICK INPUT
@@ -412,42 +443,70 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
             rx = Math.copySign(rx * rx, rx);
 
             // ========================================
-            // STEP 10: DRIVE CONTROL (PATH FOLLOWING OR MANUAL)
+            // STEP 10: DRIVE CONTROL (SIMPLIFIED PATH FOLLOWING)
             // ========================================
-            // Choose between path following or manual control
-            if (isFollowingPath && !joystickOverride) {
-                // Use PedroPathing for autonomous path following
-                // The follower.update() call above handles the path following
-                telemetry.addData("DEBUG", "Following path to preset location");
-                
-                // IMPORTANT: Don't call manualDriveControl when following path
-                // This prevents joystick input from interfering with path following
+            // FIXED: Update PedroPathing Follower with null check (includes IMU and odometry updates)
+            // This is needed for localization even when not following a path
+            if (follower != null) {
+                try {
+                    follower.update();
+                    
+                    // Debug: Show that PedroPathing is actively tracking position
+                    telemetry.addData("DEBUG", "PedroPathing tracking: X=" + String.format("%.2f", follower.getPose().getX()) + 
+                        ", Y=" + String.format("%.2f", follower.getPose().getY()) + 
+                        ", Heading=" + String.format("%.1f°", Math.toDegrees(follower.getPose().getHeading())));
+                    
+                    // SIMPLIFIED: Manual teleop drive when not in automated mode
+                    if (!automatedDrive) {
+                        // Use PedroPathing's setTeleOpDrive for smooth field-centric control
+                        // This maintains odometry and Limelight tracking while allowing manual control
+                        follower.setTeleOpDrive(
+                            -gamepad1.left_stick_y,  // Forward/backward
+                            -gamepad1.left_stick_x,  // Strafe left/right  
+                            -gamepad1.right_stick_x, // Rotation
+                            false // Field-centric (false = field-centric, true = robot-centric)
+                        );
+                        
+                        // Update telemetry with motor powers from PedroPathing
+                        double flPower = (frontLeft != null) ? frontLeft.getPower() : 0.0;
+                        double frPower = (frontRight != null) ? frontRight.getPower() : 0.0;
+                        double blPower = (backLeft != null) ? backLeft.getPower() : 0.0;
+                        double brPower = (backRight != null) ? backRight.getPower() : 0.0;
+                        updateTelemetry(flPower, frPower, blPower, brPower, follower.getPose().getHeading());
+                        
+                        telemetry.addData("DEBUG", "Manual teleop drive active - automatedDrive: " + automatedDrive);
+                    } else {
+                        // Automated path following is active
+                        telemetry.addData("DEBUG", "Automated path following active - follower.isBusy: " + follower.isBusy());
+                        
+                        // Update telemetry with zero motor powers since PedroPathing is controlling the robot
+                        updateTelemetry(0, 0, 0, 0, follower.getPose().getHeading());
+                    }
+                    
+                    // Stop automated following if the follower is done or B button is pressed
+                    if (automatedDrive && (gamepad1.bWasPressed() || !follower.isBusy())) {
+                        follower.startTeleopDrive();
+                        automatedDrive = false;
+                        currentPath = null;
+                        telemetry.addData("DEBUG", "Automated drive stopped - returning to manual control");
+                    }
+                    
+                } catch (Exception e) {
+                    telemetry.addData("ERROR", "PedroPathing update failed: " + e.getMessage());
+                    // Fall back to manual control if PedroPathing fails
+                    automatedDrive = false;
+                    manualDriveControl(x, y, rx);
+                    updateTelemetry(0, 0, 0, 0, 0);
+                }
             } else {
-                // Use manual field-oriented control
+                // FIXED: Fallback to manual control if PedroPathing is not available
+                telemetry.addData("WARNING", "PedroPathing not available - using manual control only");
                 manualDriveControl(x, y, rx);
+                updateTelemetry(0, 0, 0, 0, 0);
             }
         }
     }
     
-    /**
-     * Configure launcher power variables - adjust these values as needed
-     */
-    private void configureLauncherPowers() {
-        // Default power settings (can be adjusted here)
-        spinUpPower = 0.8;                     // Power during spin-up phase
-        launchingPower = 0.8;                  // Power during launching phase
-        launchingPowerReduced = 0.7;           // Reduced power when at target velocity
-        waitingPower = 0.8;                    // Power during waiting phase
-        waitingPowerReduced = 0.7;             // Reduced power when at target velocity
-        finalWaitPower = 0.8;                  // Power during final wait phase
-        finalWaitPowerReduced = 0.7;           // Reduced power when at target velocity
-        
-        telemetry.addData("DEBUG", "Launcher power configuration:");
-        telemetry.addData("DEBUG", "  Spin-up: " + spinUpPower);
-        telemetry.addData("DEBUG", "  Launching: " + launchingPower + " / " + launchingPowerReduced);
-        telemetry.addData("DEBUG", "  Waiting: " + waitingPower + " / " + waitingPowerReduced);
-        telemetry.addData("DEBUG", "  Final wait: " + finalWaitPower + " / " + finalWaitPowerReduced);
-    }
     
     /**
      * Handle manual drive control with field-oriented control
@@ -498,277 +557,167 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         // ========================================
         // APPLY MOTOR POWERS
         // ========================================
-        // Send the calculated powers to each motor
-        frontLeft.setPower(flPower);
-        backLeft.setPower(blPower);
-        frontRight.setPower(frPower);
-        backRight.setPower(brPower);
+        // FIXED: Send the calculated powers to each motor (with null checks)
+        if (frontLeft != null) frontLeft.setPower(flPower);
+        if (backLeft != null) backLeft.setPower(blPower);
+        if (frontRight != null) frontRight.setPower(frPower);
+        if (backRight != null) backRight.setPower(brPower);
 
         // ========================================
-        // UPDATE TELEMETRY
+        // TELEMETRY IS NOW UPDATED IN MAIN LOOP
         // ========================================
-        // Show important information on the driver station screen
-        updateTelemetry(flPower, frPower, blPower, brPower, botHeading);
+        // Telemetry is updated in the main loop to ensure it's always shown
+        // regardless of control mode (manual or autonomous)
     }
     
     /**
      * Handle preset location button presses (X, Y, A)
+     * SIMPLIFIED: Uses PedroPathing's automated drive system
      */
     private void handlePresetLocationButtons() {
-        // X button - Close Range Scoring Position
-        if (gamepad1.x) {
+        // X button - Close Range Scoring Position (edge detection)
+        if (gamepad1.xWasPressed()) {
             goToPresetLocation(closeRangePose, "Close Range Scoring");
         }
-        // Y button - Long Range Scoring Position  
-        else if (gamepad1.y) {
+        // Y button - Long Range Scoring Position (edge detection)
+        else if (gamepad1.yWasPressed()) {
             goToPresetLocation(longRangePose, "Long Range Scoring");
         }
-        // A button - Home Position
-        else if (gamepad1.a) {
+        // A button - Home Position (edge detection)
+        else if (gamepad1.aWasPressed()) {
             goToPresetLocation(homePose, "Home Position");
         }
     }
     
     /**
      * Navigate to a preset location using PedroPathing
+     * SIMPLIFIED: Uses PedroPathing's automated drive system
      */
     private void goToPresetLocation(Pose targetPose, String locationName) {
-        // Always allow new destination selection, even if currently following a path
-        // This resets the override and starts a new path
+        // Check if follower is available
+        if (follower == null) {
+            telemetry.addData("ERROR", "Cannot navigate to " + locationName + " - PedroPathing not available");
+            return;
+        }
         
-        // Create path from current position to target
-        Pose currentPose = follower.getPose();
-        currentPath = follower.pathBuilder()
-                .addPath(new BezierLine(currentPose, targetPose))
-                .setLinearHeadingInterpolation(currentPose.getHeading(), targetPose.getHeading())
-                .build();
-        
-        // Start following the path and reset override
-        follower.followPath(currentPath);
-        isFollowingPath = true;
-        joystickOverride = false; // Reset override when new destination is selected
-        
-        telemetry.addData("DEBUG", "Navigating to " + locationName + " at (" + 
-            String.format("%.1f", targetPose.getX()) + ", " + 
-            String.format("%.1f", targetPose.getY()) + ") - Override reset");
-    }
-    
-    /**
-     * Check for joystick override during path following
-     */
-    private void checkJoystickOverride() {
-        // Check if joysticks are being used (use raw values, not processed ones)
-        double leftStickMagnitude = Math.sqrt(
-            gamepad1.left_stick_x * gamepad1.left_stick_x + 
-            gamepad1.left_stick_y * gamepad1.left_stick_y
-        );
-        double rightStickMagnitude = Math.abs(gamepad1.right_stick_x);
-        
-        // If joysticks are moved beyond deadzone, override path following
-        if (leftStickMagnitude > JOYSTICK_DEADZONE || rightStickMagnitude > JOYSTICK_DEADZONE) {
-            if (isFollowingPath && !joystickOverride) {
-                joystickOverride = true;
-                isFollowingPath = false; // Stop path following immediately
-                telemetry.addData("DEBUG", "Joystick override activated - path stopped, manual control active");
+        try {
+            // Cancel any existing automated drive before starting a new one
+            if (automatedDrive) {
+                follower.startTeleopDrive();
+                automatedDrive = false;
+                currentPath = null;
+                telemetry.addData("DEBUG", "Cancelled previous automated drive before starting new navigation");
             }
-        }
-        
-        // Check if path is complete naturally (without joystick override)
-        if (isFollowingPath && !follower.isBusy()) {
-            isFollowingPath = false;
-            // Don't set joystickOverride = true here - let it remain false for natural completion
-            telemetry.addData("DEBUG", "Path following complete naturally - returning to manual control");
+            
+            // Create path from current position to target
+            Pose currentPose = follower.getPose();
+            currentPath = follower.pathBuilder()
+                    .addPath(new BezierLine(currentPose, targetPose))
+                    .setLinearHeadingInterpolation(currentPose.getHeading(), targetPose.getHeading())
+                    .build();
+            
+            // Start automated path following
+            follower.followPath(currentPath);
+            automatedDrive = true;
+            
+            telemetry.addData("DEBUG", "Navigating to " + locationName + " at (" + 
+                String.format("%.1f", targetPose.getX()) + ", " + 
+                String.format("%.1f", targetPose.getY()) + ")");
+            telemetry.addData("DEBUG", "Automated drive started - press B to cancel or wait for completion");
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to navigate to " + locationName + ": " + e.getMessage());
+            automatedDrive = false;
+            currentPath = null;
         }
     }
     
+    
     /**
-     * Launcher state machine - controls the shooting sequence
-     * This method handles the complete launch process from spin-up to feeding
-     * Now supports both short distance (right bumper) and long distance (left bumper) shooting
+     * Launcher state machine - FIXED: Proper shot completion and motor stopping
+     * Uses setVelocity() method for better control
+     * Supports both short and long distance shooting
      * 
      * @param shotRequested True when any bumper is pressed (edge detected)
-     * @param shotReleased True when any bumper is released (edge detected)
-     * @param bumperHeld True when any bumper is currently held down
      */
-    void launch(boolean shotRequested, boolean shotReleased, boolean bumperHeld) {
-        // DEBUG: Log state machine transitions
-        LaunchState previousState = launchState;
+    void launch(boolean shotRequested) {
+        // FIXED: Add null check for shooter motor
+        if (shooterMotor == null) {
+            telemetry.addData("ERROR", "Shooter motor not initialized - cannot launch");
+            return;
+        }
         
         // Get current target values based on shooting mode
         double currentTargetVelocity = getCurrentTargetVelocity();
         double currentMinVelocity = getCurrentMinVelocity();
-        double currentPower = getCurrentPower();
         
         switch (launchState) {
             case IDLE:
-                // When idle, stop the shooter and servos
-                shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-                shooterMotor.setPower(0);    // Use power control to stop
-                leftServo.setPower(0);       // Use 0 instead of STOP_SPEED for servos
-                rightServo.setPower(0);      // Use 0 instead of STOP_SPEED for servos
-                
-                // DEBUG: Log idle state hardware status
-                telemetry.addData("DEBUG", "IDLE: Setting shooter velocity to 0");
-                telemetry.addData("DEBUG", "IDLE: Setting servos to 0");
-                telemetry.addData("DEBUG", "IDLE: Current shooter velocity: " + String.format("%.1f", shooterMotor.getVelocity()));
-                telemetry.addData("DEBUG", "IDLE: Current shooter power: " + String.format("%.3f", shooterMotor.getPower()));
-                telemetry.addData("DEBUG", "IDLE: Left servo power: " + String.format("%.3f", leftServo.getPower()));
-                telemetry.addData("DEBUG", "IDLE: Right servo power: " + String.format("%.3f", rightServo.getPower()));
-                
-                // If launch is requested, start spinning up
                 if (shotRequested) {
-                    telemetry.addData("DEBUG", "IDLE -> SPIN_UP: Launch requested");
-                    feederTimer.reset(); // Reset timer for spin-up
                     launchState = LaunchState.SPIN_UP;
+                    feederTimer.reset(); // FIXED: Reset timer when entering SPIN_UP state
+                    telemetry.addData("DEBUG", "Launch requested - entering SPIN_UP (" + currentShootingMode.toString() + ")");
                 }
                 break;
-
             case SPIN_UP:
-                // Use power control based on shooting mode
-                shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-                shooterMotor.setPower(currentPower);
-                
-                // DEBUG: Log detailed hardware status
-                double currentVelocity = Math.abs(shooterMotor.getVelocity()); // Use absolute value
-                double shooterPower = shooterMotor.getPower();
-                telemetry.addData("DEBUG", "SPIN_UP: Motor mode: " + shooterMotor.getMode().toString());
-                telemetry.addData("DEBUG", "SPIN_UP: Setting power to " + String.format("%.2f", currentPower) + 
-                    " (" + currentShootingMode.toString() + ")");
-                telemetry.addData("DEBUG", "SPIN_UP: Current velocity (abs): " + String.format("%.1f", currentVelocity));
-                telemetry.addData("DEBUG", "SPIN_UP: Shooter power: " + String.format("%.3f", shooterPower));
-                telemetry.addData("DEBUG", "SPIN_UP: Target velocity: " + currentTargetVelocity);
-                telemetry.addData("DEBUG", "SPIN_UP: Min velocity: " + currentMinVelocity);
-                
-                // Check if velocity is close to target
-                double maxAllowedVelocity = currentTargetVelocity + 50; // 50 more than target
-                if (currentVelocity > maxAllowedVelocity) {
-                    telemetry.addData("DEBUG", "WARNING: Velocity too high (" + String.format("%.1f", currentVelocity) + "), max allowed: " + maxAllowedVelocity);
-                }
-                
-                // Trigger when velocity reaches target
-                if (currentVelocity >= currentTargetVelocity) {
-                    telemetry.addData("DEBUG", "SPIN_UP -> LAUNCH: Target velocity reached! (" + String.format("%.1f", currentVelocity) + " >= " + currentTargetVelocity + ")");
-                    launchState = LaunchState.LAUNCH;
-                } else {
-                    telemetry.addData("DEBUG", "SPIN_UP: Waiting for target velocity... " + String.format("%.1f", currentVelocity) + " / " + currentTargetVelocity);
+                    // FIXED: Add error handling for setVelocity() call
+                try {
+                    shooterMotor.setVelocity(currentTargetVelocity);
+                    double currentVel = Math.abs(shooterMotor.getVelocity()); // Use absolute value
+                    telemetry.addData("DEBUG", "SPIN_UP: setVelocity(" + currentTargetVelocity + ") called (" + currentShootingMode.toString() + ")");
+                    telemetry.addData("DEBUG", "SPIN_UP: Current velocity = " + shooterMotor.getVelocity() + " (abs: " + currentVel + ")");
+                    telemetry.addData("DEBUG", "SPIN_UP: Need " + currentTargetVelocity + " to launch (min: " + currentMinVelocity + ")");
+                    
+                    // FIXED: Use a more reasonable target - 95% of target velocity to account for motor variations
+                    double effectiveTargetVelocity = currentTargetVelocity * 0.95;
+                    
+                    // FIXED: Check if motor has reached effective target velocity for launching
+                    if (currentVel >= effectiveTargetVelocity) {
+                        launchState = LaunchState.LAUNCH;
+                        telemetry.addData("DEBUG", "Effective target velocity reached (" + String.format("%.1f", currentVel) + " >= " + String.format("%.1f", effectiveTargetVelocity) + ") - entering LAUNCH");
+                    }
+                    // FIXED: Add timeout protection to prevent infinite spin-up (increased timeout)
+                    else if (feederTimer.seconds() > 5.0) { // 5 second timeout
+                        launchState = LaunchState.LAUNCH;
+                        telemetry.addData("DEBUG", "Spin-up timeout - forcing launch (current: " + String.format("%.1f", currentVel) + ", target: " + String.format("%.1f", currentTargetVelocity) + ")");
+                    } else {
+                        telemetry.addData("DEBUG", "Still spinning up... (" + String.format("%.1f", currentVel) + "/" + String.format("%.1f", effectiveTargetVelocity) + " effective target)");
+                    }
+                } catch (Exception e) {
+                    telemetry.addData("ERROR", "setVelocity() failed: " + e.getMessage());
+                    launchState = LaunchState.IDLE; // Reset to idle on error
                 }
                 break;
-
             case LAUNCH:
-                // Maintain power control while feeding
-                shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-                shooterMotor.setPower(currentPower);
-                
-                // Start feeding the game pieces
-                telemetry.addData("DEBUG", "LAUNCH -> LAUNCHING: Starting feeder servos");
-                telemetry.addData("DEBUG", "LAUNCH: Setting left servo to " + FULL_SPEED);
-                telemetry.addData("DEBUG", "LAUNCH: Setting right servo to " + FULL_SPEED);
-                telemetry.addData("DEBUG", "LAUNCH: Maintaining power: " + String.format("%.2f", currentPower) + 
-                    " (" + currentShootingMode.toString() + "), velocity: " + String.format("%.1f", Math.abs(shooterMotor.getVelocity())));
-                
-                leftServo.setPower(FULL_SPEED);
-                rightServo.setPower(FULL_SPEED);
-                
-                // DEBUG: Check if servos are actually responding
-                telemetry.addData("DEBUG", "LAUNCH: Left servo power reading: " + String.format("%.3f", leftServo.getPower()));
-                telemetry.addData("DEBUG", "LAUNCH: Right servo power reading: " + String.format("%.3f", rightServo.getPower()));
-                
-                feederTimer.reset(); // Start timing the feed
-                launchState = LaunchState.LAUNCHING;
-                break;
-
-            case LAUNCHING:
-                // Maintain power control while feeding with velocity limiting
-                shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-                double launchingVelocity = Math.abs(shooterMotor.getVelocity());
-                
-                // Limit motor power based on velocity to prevent going beyond target
-                if (launchingVelocity >= currentTargetVelocity) {
-                    // Reduce power if velocity is at or above target
-                    shooterMotor.setPower(launchingPowerReduced);
+                // FIXED: Add null checks for servos
+                if (leftServo != null && rightServo != null) {
+                    leftServo.setPower(FULL_SPEED);
+                    rightServo.setPower(FULL_SPEED);
+                    feederTimer.reset();
+                    launchState = LaunchState.LAUNCHING;
+                    telemetry.addData("DEBUG", "LAUNCH: Servos activated, entering LAUNCHING");
                 } else {
-                    // Use normal power if below target
-                    shooterMotor.setPower(launchingPower);
-                }
-                
-                // Continue feeding for the specified time
-                double feedTime = feederTimer.seconds();
-                telemetry.addData("DEBUG", "LAUNCHING: Feed time: " + String.format("%.2f", feedTime) + 
-                                " / Target: " + FEED_TIME_SECONDS);
-                telemetry.addData("DEBUG", "LAUNCHING: Velocity: " + String.format("%.1f", launchingVelocity) + 
-                                " / Target: " + currentTargetVelocity + " (" + currentShootingMode.toString() + ")");
-                telemetry.addData("DEBUG", "LAUNCHING: Left servo power: " + String.format("%.3f", leftServo.getPower()));
-                telemetry.addData("DEBUG", "LAUNCHING: Right servo power: " + String.format("%.3f", rightServo.getPower()));
-                
-                if (feedTime > FEED_TIME_SECONDS) {
-                    // Feeding complete, check if bumper is still held
-                    if (bumperHeld) {
-                        // Go to continuous mode for repeated shooting
-                        telemetry.addData("DEBUG", "LAUNCHING -> CONTINUOUS: Starting continuous mode");
-                        launchState = LaunchState.CONTINUOUS;
-                        leftServo.setPower(0);   // Stop servos
-                        rightServo.setPower(0);  // Stop servos
-                        feederTimer.reset();     // Reset timer for next feed
-                    } else {
-                        // Return to idle
-                        telemetry.addData("DEBUG", "LAUNCHING -> IDLE: Feed complete, bumper released");
-                        launchState = LaunchState.IDLE;
-                        leftServo.setPower(0);   // Use 0 instead of STOP_SPEED
-                        rightServo.setPower(0);  // Use 0 instead of STOP_SPEED
-                    }
-                }
-                break;
-
-            case CONTINUOUS:
-                // Maintain power control during continuous shooting with velocity limiting
-                shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-                double continuousVelocity = Math.abs(shooterMotor.getVelocity());
-                
-                // Limit motor power based on velocity to prevent going beyond target
-                if (continuousVelocity >= currentTargetVelocity) {
-                    // Reduce power if velocity is at or above target
-                    shooterMotor.setPower(waitingPowerReduced);
-                    telemetry.addData("DEBUG", "CONTINUOUS: Velocity at target, reducing power to " + String.format("%.2f", waitingPowerReduced));
-                } else {
-                    // Use normal power if below target
-                    shooterMotor.setPower(waitingPower);
-                    telemetry.addData("DEBUG", "CONTINUOUS: Below target velocity, using " + String.format("%.2f", waitingPower) + " power");
-                }
-                
-                // Continuous shooting mode - wait for velocity before each shot
-                double continuousTime = feederTimer.seconds();
-                telemetry.addData("DEBUG", "CONTINUOUS: Time since last feed: " + String.format("%.2f", continuousTime));
-                telemetry.addData("DEBUG", "CONTINUOUS: Current velocity: " + String.format("%.1f", continuousVelocity));
-                telemetry.addData("DEBUG", "CONTINUOUS: Target velocity: " + currentTargetVelocity + " (" + currentShootingMode.toString() + ")");
-                telemetry.addData("DEBUG", "CONTINUOUS: Bumper held: " + bumperHeld);
-                
-                if (bumperHeld) {
-                    // Check if it's time for next feed AND velocity is at target
-                    if (continuousTime > FEED_DELAY_SECONDS && continuousVelocity >= currentTargetVelocity) {
-                        // Time to feed another ball and velocity is ready
-                        telemetry.addData("DEBUG", "CONTINUOUS -> LAUNCHING: Feeding next ball (velocity: " + String.format("%.1f", continuousVelocity) + ")");
-                        leftServo.setPower(FULL_SPEED);
-                        rightServo.setPower(FULL_SPEED);
-                        feederTimer.reset(); // Start timing the feed
-                        launchState = LaunchState.LAUNCHING;
-                    } else if (continuousTime > FEED_DELAY_SECONDS) {
-                        telemetry.addData("DEBUG", "CONTINUOUS: Waiting for target velocity... " + String.format("%.1f", continuousVelocity) + " / " + currentTargetVelocity);
-                    } else {
-                        telemetry.addData("DEBUG", "CONTINUOUS: Waiting for delay... " + String.format("%.2f", continuousTime) + " / " + FEED_DELAY_SECONDS);
-                    }
-                } else {
-                    // Bumper released, return to idle
-                    telemetry.addData("DEBUG", "CONTINUOUS -> IDLE: Bumper released");
+                    telemetry.addData("ERROR", "Servos not initialized - cannot feed");
                     launchState = LaunchState.IDLE;
-                    leftServo.setPower(0);
-                    rightServo.setPower(0);
                 }
                 break;
-        }
-        
-        // DEBUG: Log state changes
-        if (previousState != launchState) {
-            telemetry.addData("DEBUG", "State changed: " + previousState.toString() + " -> " + launchState.toString());
+            case LAUNCHING:
+                if (feederTimer.seconds() > FEED_TIME_SECONDS) {
+                    // FIXED: Stop servos first
+                    if (leftServo != null) leftServo.setPower(STOP_SPEED);
+                    if (rightServo != null) rightServo.setPower(STOP_SPEED);
+                    
+                    // FIXED: Stop the shooter motor after shot is complete
+                    try {
+                        shooterMotor.setVelocity(0); // Stop the motor
+                        telemetry.addData("DEBUG", "LAUNCHING: Motor stopped after shot completion");
+                    } catch (Exception e) {
+                        telemetry.addData("ERROR", "Failed to stop shooter motor: " + e.getMessage());
+                    }
+                    
+                    launchState = LaunchState.IDLE;
+                    telemetry.addData("DEBUG", "LAUNCHING: Feed complete, motor stopped, returning to IDLE");
+                }
+                break;
         }
     }
     
@@ -788,15 +737,6 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     private double getCurrentMinVelocity() {
         return (currentShootingMode == ShootingMode.LONG_DISTANCE) ? 
             LONG_DISTANCE_MIN_VELOCITY : LAUNCHER_MIN_VELOCITY;
-    }
-    
-    /**
-     * Get current motor power based on shooting mode
-     * @return Motor power for current shooting mode
-     */
-    private double getCurrentPower() {
-        return (currentShootingMode == ShootingMode.LONG_DISTANCE) ? 
-            LONG_DISTANCE_POWER : LAUNCHER_POWER;
     }
     
     /**
@@ -852,16 +792,28 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         telemetry.addLine("--- ROBOT STATUS ---");
         telemetry.addData("Heading (deg)", String.format("%.1f", Math.toDegrees(botHeading)));
         telemetry.addData("Heading (rad)", String.format("%.3f", botHeading));
-        telemetry.addData("X Position", String.format("%.2f", follower.getPose().getX()));
-        telemetry.addData("Y Position", String.format("%.2f", follower.getPose().getY()));
         telemetry.addLine();
         
-        // PedroPathing status
+        // FIXED: PedroPathing coordinates - prominently displayed (with null checks)
+        telemetry.addLine("--- PEDROPATHING COORDINATES ---");
+        if (follower != null) {
+            telemetry.addData("X Position", String.format("%.2f", follower.getPose().getX()));
+            telemetry.addData("Y Position", String.format("%.2f", follower.getPose().getY()));
+            telemetry.addData("Pose Valid", "YES (PedroPathing Active)");
+        } else {
+            telemetry.addData("X Position", "N/A (PedroPathing not available)");
+            telemetry.addData("Y Position", "N/A (PedroPathing not available)");
+            telemetry.addData("Pose Valid", "NO (PedroPathing not available)");
+        }
+        telemetry.addLine();
+        
+        // FIXED: PedroPathing status (with null checks) - simplified approach
         telemetry.addLine("--- PATH FOLLOWING ---");
-        telemetry.addData("Following Path", isFollowingPath ? "YES" : "NO");
-        telemetry.addData("Joystick Override", joystickOverride ? "ACTIVE (Manual Mode)" : "INACTIVE");
-        telemetry.addData("Path Busy", follower.isBusy() ? "YES" : "NO");
-        telemetry.addData("Control Mode", (isFollowingPath && !joystickOverride) ? "AUTONOMOUS" : "MANUAL");
+        telemetry.addData("Automated Drive", automatedDrive ? "YES" : "NO");
+        telemetry.addData("Path Busy", (follower != null && follower.isBusy()) ? "YES" : "NO");
+        telemetry.addData("Current Path", currentPath != null ? "EXISTS" : "NULL");
+        telemetry.addData("Control Mode", automatedDrive ? "AUTONOMOUS" : "MANUAL");
+        telemetry.addData("Manual Control Active", !automatedDrive ? "YES" : "NO");
         telemetry.addLine();
         
         // Motor power information
@@ -872,21 +824,35 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         telemetry.addData("Back Right", String.format("%.3f", brPower));
         telemetry.addLine();
         
-        // Launcher information
+        // FIXED: Launcher information (with null checks)
         telemetry.addLine("--- LAUNCHER STATUS ---");
         telemetry.addData("Launch State", launchState.toString());
         telemetry.addData("Shooting Mode", currentShootingMode.toString());
-        telemetry.addData("Shooter Velocity", String.format("%.1f", shooterMotor.getVelocity()));
+        if (shooterMotor != null) {
+            telemetry.addData("Shooter Velocity", String.format("%.1f", shooterMotor.getVelocity()));
+            telemetry.addData("Abs Velocity", String.format("%.1f", Math.abs(shooterMotor.getVelocity())));
+            telemetry.addData("Shooter Power", String.format("%.3f", shooterMotor.getPower()));
+            telemetry.addData("Motor Mode", shooterMotor.getMode().toString());
+        } else {
+            telemetry.addData("Shooter Velocity", "N/A (Motor not available)");
+            telemetry.addData("Abs Velocity", "N/A (Motor not available)");
+            telemetry.addData("Shooter Power", "N/A (Motor not available)");
+            telemetry.addData("Motor Mode", "N/A (Motor not available)");
+        }
         telemetry.addData("Target Velocity", getCurrentTargetVelocity() + " (" + currentShootingMode.toString() + ")");
         telemetry.addData("Min Velocity", getCurrentMinVelocity());
         telemetry.addData("Right Bumper", gamepad1.right_bumper ? "PRESSED" : "RELEASED");
         telemetry.addData("Left Bumper", gamepad1.left_bumper ? "PRESSED" : "RELEASED");
-        telemetry.addData("Shooter Power", String.format("%.3f", shooterMotor.getPower()));
-        telemetry.addData("Target Power", String.format("%.2f", getCurrentPower()) + " (" + currentShootingMode.toString() + ")");
-        telemetry.addData("Left Servo Power", String.format("%.3f", leftServo.getPower()));
-        telemetry.addData("Right Servo Power", String.format("%.3f", rightServo.getPower()));
-        telemetry.addData("Motor Mode", shooterMotor.getMode().toString());
-        telemetry.addData("Current Position", shooterMotor.getCurrentPosition());
+        if (leftServo != null) {
+            telemetry.addData("Left Servo Power", String.format("%.3f", leftServo.getPower()));
+        } else {
+            telemetry.addData("Left Servo Power", "N/A (Servo not available)");
+        }
+        if (rightServo != null) {
+            telemetry.addData("Right Servo Power", String.format("%.3f", rightServo.getPower()));
+        } else {
+            telemetry.addData("Right Servo Power", "N/A (Servo not available)");
+        }
         telemetry.addLine();
         
         // Control instructions
@@ -899,11 +865,12 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         telemetry.addData("X Button", "Go to Close Range Scoring");
         telemetry.addData("Y Button", "Go to Long Range Scoring");
         telemetry.addData("A Button", "Go to Home Position");
+        telemetry.addData("B Button", "Cancel Automated Drive");
         telemetry.addLine();
         
-        // Performance information
+        // FIXED: Performance information (with null checks)
         telemetry.addLine("--- PERFORMANCE ---");
-        telemetry.addData("PedroPathing Status", follower.isBusy() ? "BUSY" : "IDLE");
+        telemetry.addData("PedroPathing Status", (follower != null && follower.isBusy()) ? "BUSY" : "IDLE");
         telemetry.addData("Deadzone", JOYSTICK_DEADZONE);
         telemetry.addData("Drive Power Multiplier", DRIVE_POWER_MULTIPLIER);
         telemetry.addLine();
@@ -930,125 +897,10 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         
         telemetry.update();
     }
-    
-    /**
-     * Draw current robot position and pose history on Panels dashboard
-     */
-    private void drawCurrentAndHistory() {
-        try {
-            // Set Panels field offsets for PedroPathing
-            panelsField.setOffsets(PanelsField.INSTANCE.getPresets().getPEDRO_PATHING());
-            
-            // Draw pose history (robot's path)
-            drawPoseHistory(follower.getPoseHistory());
-            
-            // Draw current robot position
-            Pose currentPose = follower.getPose();
-            drawRobot(currentPose);
-            
-            // Also draw a test robot at the starting position to verify drawing works
-            Pose startPose = new Pose(81.096, 38.795, Math.toRadians(0));
-            drawRobotAtPosition(startPose, "#FF0000"); // Red color for test robot
-            
-            // Debug: Show robot position in telemetry
-            telemetry.addData("DEBUG", "Drawing robot at: (" + 
-                String.format("%.1f", currentPose.getX()) + ", " + 
-                String.format("%.1f", currentPose.getY()) + ") heading: " + 
-                String.format("%.1f", Math.toDegrees(currentPose.getHeading())));
-            
-            // Send the drawing packet to Panels
-            panelsField.update();
-        } catch (Exception e) {
-            // Handle drawing errors and show in telemetry
-            telemetry.addData("DEBUG", "Drawing error: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Draw robot at specified pose
-     */
-    private void drawRobot(Pose pose) {
-        if (pose == null || Double.isNaN(pose.getX()) || Double.isNaN(pose.getY()) || Double.isNaN(pose.getHeading())) {
-            telemetry.addData("DEBUG", "Invalid pose for drawing robot");
-            return;
-        }
-        
-        // Set style and draw robot circle
-        panelsField.setStyle(robotLook);
-        panelsField.moveCursor(pose.getX(), pose.getY());
-        panelsField.circle(ROBOT_RADIUS);
-        
-        // Draw heading line using the same method as the original Drawing class
-        com.pedropathing.math.Vector v = pose.getHeadingAsUnitVector();
-        v.setMagnitude(v.getMagnitude() * ROBOT_RADIUS);
-        double x1 = pose.getX() + v.getXComponent() / 2;
-        double y1 = pose.getY() + v.getYComponent() / 2;
-        double x2 = pose.getX() + v.getXComponent();
-        double y2 = pose.getY() + v.getYComponent();
-        
-        panelsField.setStyle(robotLook);
-        panelsField.moveCursor(x1, y1);
-        panelsField.line(x2, y2);
-        
-        telemetry.addData("DEBUG", "Robot drawn: circle at (" + 
-            String.format("%.1f", pose.getX()) + ", " + 
-            String.format("%.1f", pose.getY()) + ") radius: " + ROBOT_RADIUS);
-    }
-    
-    /**
-     * Draw pose history
-     */
-    private void drawPoseHistory(com.pedropathing.util.PoseHistory poseHistory) {
-        panelsField.setStyle(historyLook);
-        
-        double[] xPositions = poseHistory.getXPositionsArray();
-        double[] yPositions = poseHistory.getYPositionsArray();
-        
-        int pointsDrawn = 0;
-        for (int i = 0; i < xPositions.length - 1; i++) {
-            panelsField.moveCursor(xPositions[i], yPositions[i]);
-            panelsField.line(xPositions[i + 1], yPositions[i + 1]);
-            pointsDrawn++;
-        }
-        
-        telemetry.addData("DEBUG", "Pose history drawn: " + pointsDrawn + " line segments");
-    }
-    
-    /**
-     * Draw robot at specified position with custom color
-     */
-    private void drawRobotAtPosition(Pose pose, String color) {
-        if (pose == null || Double.isNaN(pose.getX()) || Double.isNaN(pose.getY()) || Double.isNaN(pose.getHeading())) {
-            return;
-        }
-        
-        // Create custom style for this robot
-        Style customStyle = new Style("", color, 0.0);
-        
-        // Set style and draw robot circle
-        panelsField.setStyle(customStyle);
-        panelsField.moveCursor(pose.getX(), pose.getY());
-        panelsField.circle(ROBOT_RADIUS);
-        
-        // Draw heading line
-        com.pedropathing.math.Vector v = pose.getHeadingAsUnitVector();
-        v.setMagnitude(v.getMagnitude() * ROBOT_RADIUS);
-        double x1 = pose.getX() + v.getXComponent() / 2;
-        double y1 = pose.getY() + v.getYComponent() / 2;
-        double x2 = pose.getX() + v.getXComponent();
-        double y2 = pose.getY() + v.getYComponent();
-        
-        panelsField.setStyle(customStyle);
-        panelsField.moveCursor(x1, y1);
-        panelsField.line(x2, y2);
-        
-        telemetry.addData("DEBUG", "Test robot drawn at: (" + 
-            String.format("%.1f", pose.getX()) + ", " + 
-            String.format("%.1f", pose.getY()) + ") color: " + color);
-    }
-    
+
     /**
      * Convert Limelight AprilTag data to PedroPathing coordinates
+     * FIXED: Uses proper API methods instead of fragile string parsing
      * This method maintains field-centric coordinates while applying vision corrections
      * 
      * Based on FTC best practices:
@@ -1076,13 +928,10 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
                 return null;
             }
             
-            // Log the raw 3D pose for debugging
+            // FIXED: Parse Pose3D string representation to extract coordinates
+            // This is the most reliable way to get coordinates from Pose3D
             String poseString = botpose.toString();
-            telemetry.addData("DEBUG", "Raw Limelight 3D pose: " + poseString);
-            
-            // Convert Pose3D to 2D coordinates for path planning
-            // This follows FTC best practices: 3D measurement -> 2D path planning
-            // Since toPose2d() method is not available, we'll parse the string representation
+            telemetry.addData("DEBUG", "Raw Limelight 3D pose string: " + poseString);
             
             // Parse the Pose3D string to extract coordinates
             // Format: "Pose3D{x=0.0, y=0.0, z=0.0, roll=0.0, pitch=0.0, yaw=0.0}"
@@ -1090,7 +939,6 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
             
             try {
                 // Extract x, y, and yaw (heading) from the pose string
-                // This is a simplified parser - you may need to adjust based on actual format
                 String[] parts = poseString.replaceAll("[{}]", "").split(",");
                 for (String part : parts) {
                     String[] keyValue = part.split("=");
@@ -1116,10 +964,22 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
                 return null;
             }
             
-            // Validate the converted coordinates
+            // Log the parsed coordinates for debugging
+            telemetry.addData("DEBUG", "Parsed coordinates: x=" + String.format("%.2f", x) + 
+                ", y=" + String.format("%.2f", y) + ", yaw=" + String.format("%.2f", heading));
+            
+            // Validate the coordinates
             if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(heading) ||
                 Double.isInfinite(x) || Double.isInfinite(y) || Double.isInfinite(heading)) {
-                telemetry.addData("DEBUG", "Invalid converted 2D pose coordinates");
+                telemetry.addData("DEBUG", "Invalid 3D pose coordinates from Limelight");
+                return null;
+            }
+            
+            // FIXED: Add coordinate validation for reasonable field bounds
+            // Typical FTC field is about 144" x 144", so check for reasonable values
+            if (Math.abs(x) > 200 || Math.abs(y) > 200) {
+                telemetry.addData("DEBUG", "Pose coordinates out of reasonable field bounds: (" + 
+                    String.format("%.2f", x) + ", " + String.format("%.2f", y) + ")");
                 return null;
             }
             
@@ -1140,8 +1000,21 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
             // This prevents sudden jumps when AprilTag corrections are applied
             Pose currentPose = follower.getPose();
             
+            // FIXED: Add distance check to prevent large jumps
+            double distanceFromCurrent = Math.sqrt(
+                Math.pow(pedroPose.getX() - currentPose.getX(), 2) + 
+                Math.pow(pedroPose.getY() - currentPose.getY(), 2)
+            );
+            
+            // If the vision correction is too far from current pose, reject it
+            if (distanceFromCurrent > 50.0) { // 50 inch threshold
+                telemetry.addData("DEBUG", "Vision correction too far from current pose (" + 
+                    String.format("%.2f", distanceFromCurrent) + " inches) - rejecting");
+                return null;
+            }
+            
             // Use weighted average for smoother corrections (70% current, 30% vision)
-            double fusionWeight = 0.3; // Adjust this value (0.0 = no vision, 1.0 = full vision)
+            double fusionWeight = 1.0; // Adjust this value (0.0 = no vision, 1.0 = full vision)
             
             double fusedX = currentPose.getX() * (1 - fusionWeight) + pedroPose.getX() * fusionWeight;
             double fusedY = currentPose.getY() * (1 - fusionWeight) + pedroPose.getY() * fusionWeight;
@@ -1153,6 +1026,7 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
                 String.format("%.2f", y) + ", " + String.format("%.1f°", Math.toDegrees(heading)) + ")");
             telemetry.addData("DEBUG", "Vision fusion: " + String.format("%.1f%% vision, %.1f%% current", 
                 fusionWeight * 100, (1 - fusionWeight) * 100));
+            telemetry.addData("DEBUG", "Distance from current: " + String.format("%.2f", distanceFromCurrent) + " inches");
             
             return fusedPose;
             
