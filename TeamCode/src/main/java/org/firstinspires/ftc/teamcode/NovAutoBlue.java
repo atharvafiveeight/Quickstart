@@ -27,9 +27,9 @@ import com.bylazar.field.Style;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 
-@Autonomous(name = "NovAutoRed", group = "Autonomous")
+@Autonomous(name = "NovAutoBlue", group = "Autonomous")
 @Configurable
-public class NovAutoRed extends OpMode {
+public class NovAutoBlue extends OpMode {
 
     private Follower follower;
     private Timer pathTimer, actionTimer, opmodeTimer;
@@ -55,10 +55,12 @@ public class NovAutoRed extends OpMode {
     private int ballsScored;
     private boolean scoringComplete;
     
-    // Define poses for the autonomous path (simplified)
-    private final Pose startPose = new Pose(86.795, 134.575, Math.toRadians(0)); // Start position
-    private final Pose scorePose = new Pose(82.192, 97.534, Math.toRadians(40)); // Scoring position
-    private final Pose startTeleopPose = new Pose(81.096, 38.795, Math.toRadians(0)); // Final park pose for teleop
+    // Define poses for the autonomous path (simplified) - BLUE SIDE
+    private final Pose startPose = new Pose(57.205, 134.575, Math.toRadians(180)); // Start position
+    private final Pose scorePose = new Pose(61.808, 97.534, Math.toRadians(140)); // Scoring position
+    // Blue side ends with 180° heading (facing toward driver) in PedroPathing coordinates
+    // This matches teleop starting pose and aligns with IMU calibration
+    private final Pose startTeleopPose = new Pose(62.904, 38.795, Math.toRadians(180)); // Final park pose for teleop
 
     // Define path chains (simplified)
     private PathChain startToScore;
@@ -69,8 +71,8 @@ public class NovAutoRed extends OpMode {
     private final double FEED_DELAY_SECONDS = 2;        // Delay between feeds
     private final double FINAL_LAUNCH_DELAY = 2.00;        // Extra delay after last ball to ensure it launches
     private final double FULL_SPEED = 1.0;                // Full speed for servos
-    private final double LAUNCHER_TARGET_VELOCITY = 1175; // Target velocity for shooter
-    private final double LAUNCHER_MIN_VELOCITY = 1100;    // Minimum velocity before launching
+    private final double LAUNCHER_TARGET_VELOCITY = 1150; // Target velocity for shooter
+    private final double LAUNCHER_MIN_VELOCITY = 1075;    // Minimum velocity before launching
     private final double LAUNCHER_VELOCITY_BUFFER = 50;   // Buffer above target velocity for first ball
     private final int TOTAL_BALLS_TO_SCORE = 3;           // Number of balls to score per round
     
@@ -259,14 +261,14 @@ public class NovAutoRed extends OpMode {
      */
     private void buildAutonomousPaths() {
         try {
-            // Path 1: Start to Score (BezierLine with heading interpolation 90° to 40°)
+            // Path 1: Start to Score (BezierLine with heading interpolation 180° to 140°)
             startToScore = follower.pathBuilder()
                     .addPath(new BezierLine(startPose, scorePose))
                     .setLinearHeadingInterpolation(startPose.getHeading(), scorePose.getHeading())
                     .build();
             telemetry.addData("DEBUG", "Built startToScore path successfully with " + String.format("%.1f%%", autonomousDriveSpeed * 100) + " speed");
                     
-            // Path 2: Score to Teleop (BezierLine with heading interpolation 40° to 180°)
+            // Path 2: Score to Teleop (BezierLine with heading interpolation 140° to 180°)
             scoreToTeleop = follower.pathBuilder()
                     .addPath(new BezierLine(scorePose, startTeleopPose))
                     .setLinearHeadingInterpolation(scorePose.getHeading(), startTeleopPose.getHeading())
@@ -606,7 +608,7 @@ public class NovAutoRed extends OpMode {
         telemetry.clear();
         
         // Header information
-        telemetry.addLine("=== NOV AUTO RED ===");
+        telemetry.addLine("=== NOV AUTO BLUE ===");
         telemetry.addLine();
         
         // Robot position

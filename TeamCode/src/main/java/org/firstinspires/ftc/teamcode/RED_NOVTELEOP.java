@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.hardware.lynx.LynxModule;
@@ -32,7 +33,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.List;
 
 /**
- * NovTeleOpRed - Field-Oriented Control TeleOp Program with PedroPathing Integration
+ * RED_NOVTELEOP - Field-Oriented Control TeleOp Program with PedroPathing Integration
  * 
  * This program provides smooth, field-oriented control using the GoBilda PinPoint IMU.
  * Field-oriented control means the robot moves relative to the field, not relative to the robot's current heading.
@@ -40,6 +41,8 @@ import java.util.List;
  * Key Features:
  * - Field-Oriented Control (FOC) using GoBilda PinPoint IMU
  * - PedroPathing integration for autonomous navigation to preset locations
+ * - Dynamic shooter velocity based on Limelight distance measurement
+ * - L1 Scope mode for automatic alignment using Limelight camera
  * - Same motor setup as MainOverdriveTeleOp for consistency
  * - Anti-drift measures to prevent unwanted movement
  * - Bulk reading for faster performance
@@ -49,8 +52,9 @@ import java.util.List;
  * - Left Stick Y: Move forward/backward (field-relative)
  * - Left Stick X: Strafe left/right (field-relative)  
  * - Right Stick X: Rotate left/right
- * - Right Bumper: Launch game piece (state machine controlled)
- * - Left Bumper: Long Distance Launch
+ * - Right Bumper (R1): Distance-based shot (velocity auto-adjusts based on distance)
+ * - R2 Trigger: 3-Ball Pulsed Shot (Distance-based velocity)
+ * - L1 Trigger: Scope Mode - Auto-align using Limelight camera
  * - X Button: Go to Close Range Scoring Position
  * - Y Button: Go to Long Range Scoring Position
  * - A Button: Go to Home Position
@@ -58,8 +62,8 @@ import java.util.List;
  * @author Sahas Kumar
  * @version 3.0 - Removed Panels integration, fixed launcher and path following
  */
-@TeleOp(name = "NovTeleOpRedSemiAuto", group = "TeleOp")
-public class NovTeleOpRedSemiAuto extends LinearOpMode {
+@TeleOp(name = "RED_NOVTELEOP", group = "TeleOp")
+public class RED_NOVTELEOP extends LinearOpMode {
 
     // Motor declarations
     private DcMotorEx frontLeft, frontRight, backLeft, backRight;
@@ -68,6 +72,12 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     private DcMotorEx shooterMotor;  // Shooter motor with velocity control
     private CRServo leftServo;       // Left feeder servo
     private CRServo rightServo;      // Right feeder servo
+    private Servo rgb;               // RGB indicator (configured as servo)
+
+    // RGB indicator positions (servo setPosition values)
+    private static final double RGB_RED = 0.2777;
+    private static final double RGB_GREEN = 0.5;
+    private static final double RGB_ORANGE = 0.333;
     
     // Limelight vision sensor for localization
     private Limelight3A limelight;
@@ -84,7 +94,7 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     private static final double DRIVE_POWER_MULTIPLIER = 0.95; // Power multiplier for speed control
     
     // Launcher constants - simplified from StarterBotTeleopMecanums
-    private final double FEED_TIME_SECONDS = 0.05;        // How long to feed game pieces
+    private final double FEED_TIME_SECONDS = 0.1;        // How long to feed game pieces
     private final double STOP_SPEED = 0.0;                // Stop speed for shooter
     private final double FULL_SPEED = 1.0;                // Full speed for servos
     
@@ -93,9 +103,22 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     private final double LAUNCHER_TARGET_VELOCITY = 1400; // Target velocity for short distance
     private final double LAUNCHER_MIN_VELOCITY = 1350;    // Minimum velocity for short distance
     
-    // Long distance shooting (left bumper)
-    private final double LONG_DISTANCE_TARGET_VELOCITY = 1750; // Target velocity for long distance
-    private final double LONG_DISTANCE_MIN_VELOCITY = 1625;    // Minimum velocity for long distance
+    // Long distance velocity constants (used for calibration in distance-based calculation)
+    private final double LONG_DISTANCE_TARGET_VELOCITY = 1750; // Target velocity for long distance (calibration point)
+    private final double LONG_DISTANCE_MIN_VELOCITY = 1625;    // Minimum velocity for long distance (calibration point)
+    
+    // Distance-based velocity calculation using actual measured distance
+    // Calibration points from actual measurements:
+    private final double SHORT_DISTANCE_INCHES = 36.0;  // Actual distance for short shots (inches)
+    private final double LONG_DISTANCE_INCHES = 114.0;  // Actual distance for long shots (inches)
+    private final double SHORT_DISTANCE_VELOCITY = 1390.0; // Velocity at 36" (RPM) - adjusted from 1400
+    private final double LONG_DISTANCE_VELOCITY = 1730.0;  // Velocity at 114" (RPM) - adjusted from 1750
+    private final double MIN_VELOCITY = 1200;        // Minimum velocity for very close shots
+    private final double MAX_VELOCITY = 1800;       // Maximum velocity for very far shots
+    
+    // Dynamic velocity calculation
+    private double currentCalculatedVelocity = LAUNCHER_TARGET_VELOCITY; // Default to short distance
+    private double currentCalculatedMinVelocity = LAUNCHER_MIN_VELOCITY; // Default to short distance
     
     // Field-oriented control is always enabled in this program
     private static final boolean FIELD_CENTRIC = true;
@@ -118,9 +141,9 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     private boolean r2VelocityReached = false;
     
     // FIXED: Pulsed feeding constants for reliable 3-ball shooting
-    private final double R2_BALL_FEED_TIME = 0.05; // Feed each ball for 0.05 seconds
+    private final double R2_BALL_FEED_TIME = 0.1; // Feed each ball for 0.05 seconds
     private final double R2_BALL_PAUSE_TIME = 1; // Pause between balls for 1.0 seconds
-    private final double R2_MOTOR_STOP_TIME = 0.2; // Brief motor stop time for recovery
+    private final double R2_MOTOR_STOP_TIME = 0.8; // Brief motor stop time for recovery (increased)
     private final int R2_BALL_COUNT = 3; // Shoot exactly 3 balls
     private int r2BallsShot = 0; // Track how many balls have been shot
     private boolean r2FeedingBall = false; // Track if currently feeding a ball
@@ -134,11 +157,27 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     // R2 mode will trigger servos when velocity reaches the same threshold as R1 mode
     // This ensures consistent behavior between single shots and continuous shooting
     
+    // L1 Scope mode - automatic alignment using Limelight (Ty-based)
+    private boolean l1ScopeMode = false;
+    private boolean l1Pressed = false;
+    private ElapsedTime scopeTimer = new ElapsedTime();
+    private double scopeRotationCommand = 0.0; // Rotation command from scope mode
+    private final double SCOPE_ROTATION_SPEED = 0.35; // Slower auto-rotation for finer control
+    private final double SCOPE_TY_TOLERANCE = 0.5; // ty tolerance in degrees (±0.5° = centered heading)
+    private final double SCOPE_TIMEOUT = 2.0; // 2 second timeout for scope mode (reduced)
+    private final double SCOPE_TY_GAIN = 0.14; // Lower gain to avoid overshoot
+
+    // L1 Scope debug fields (for compact telemetry)
+    private boolean scopeDebugActive = false;
+    private String scopeDebugStatus = "";
+    private double scopeDebugTy = Double.NaN;
+    private double scopeDebugRotation = 0.0;
+    private double scopeDebugTime = 0.0;
     
-    // Shooting mode tracking
+    
+    // Shooting mode tracking (simplified - all shots use distance-based velocity)
     private enum ShootingMode {
-        SHORT_DISTANCE,  // Right bumper - normal shooting
-        LONG_DISTANCE    // Left bumper - long distance shooting
+        DISTANCE_BASED  // All shooting uses distance-based velocity
     }
     
     private ShootingMode currentShootingMode;
@@ -157,7 +196,7 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         
         // Initialize launcher state machine
         launchState = LaunchState.IDLE;
-        currentShootingMode = ShootingMode.SHORT_DISTANCE; // Default to short distance
+        currentShootingMode = ShootingMode.DISTANCE_BASED; // All shots use distance-based velocity
         
         // ========================================
         // STEP 1: SETUP BULK READING FOR SPEED
@@ -259,11 +298,25 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
             hardwareInitialized = false;
         }
         
+        // Initialize RGB indicator servo (for Limelight state)
+        try {
+            rgb = hardwareMap.get(Servo.class, "rgb");
+            if (rgb == null) {
+                telemetry.addData("ERROR", "RGB indicator 'rgb' not found in hardware map!");
+            } else {
+                // Default to RED on init until we have a reading
+                rgb.setPosition(RGB_RED);
+            }
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to initialize RGB indicator: " + e.getMessage());
+        }
+        
         // DEBUG: Verify hardware mapping
         telemetry.addData("DEBUG", "Hardware mapping status:");
         telemetry.addData("DEBUG", "  Shooter Motor: " + (shooterMotor != null ? "FOUND" : "MISSING"));
         telemetry.addData("DEBUG", "  Left Servo: " + (leftServo != null ? "FOUND" : "MISSING"));
         telemetry.addData("DEBUG", "  Right Servo: " + (rightServo != null ? "FOUND" : "MISSING"));
+        telemetry.addData("DEBUG", "  RGB Indicator: " + (rgb != null ? "FOUND" : "MISSING"));
         telemetry.addData("DEBUG", "  Overall Status: " + (hardwareInitialized ? "SUCCESS" : "FAILED"));
         
         if (!hardwareInitialized) {
@@ -372,7 +425,7 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         // ========================================
         // STEP 5: READY TO START
         // ========================================
-        telemetry.addData("Status", "NovTeleOpRed Ready!");
+        telemetry.addData("Status", "RED_NOVTELEOP Ready!");
         telemetry.addData("Localization", "PedroPathing + Limelight Vision");
         telemetry.addData("Control Mode", "Field-Oriented Control");
         telemetry.addData("Instructions", "Use left stick to move, right stick X to rotate");
@@ -441,21 +494,21 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
             // ========================================
             // STEP 8: LAUNCHER SYSTEM
             // ========================================
-            // Handle bumper presses and set shooting mode
+            // Handle R1 button for distance-based shooting
             boolean rightBumperPressed = gamepad1.rightBumperWasPressed();
-            boolean leftBumperPressed = gamepad1.leftBumperWasPressed();
             
             // Handle R2 button for 3-shot mode
             boolean r2CurrentlyPressed = gamepad1.right_trigger > 0.1;
             boolean r2JustPressed = r2CurrentlyPressed && !r2Pressed;
             
-            // Set shooting mode based on which bumper is pressed
+            // Handle L1 button for scope mode
+            boolean l1CurrentlyPressed = gamepad1.left_bumper;
+            boolean l1JustPressed = l1CurrentlyPressed && !l1Pressed;
+            
+            // R1 (right bumper): Uses distance-based velocity for all shots
             if (rightBumperPressed) {
-                currentShootingMode = ShootingMode.SHORT_DISTANCE;
-                telemetry.addData("DEBUG", "SHOOTING MODE: Short distance (right bumper)");
-            } else if (leftBumperPressed) {
-                currentShootingMode = ShootingMode.LONG_DISTANCE;
-                telemetry.addData("DEBUG", "SHOOTING MODE: Long distance (left bumper)");
+                currentShootingMode = ShootingMode.DISTANCE_BASED;
+                telemetry.addData("DEBUG", "R1: Distance-based shot (velocity from distance)");
             }
             
             // Handle R2 3-second mode
@@ -465,11 +518,19 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
                 handleR2ThreeSecondMode();
             }
             
-            // Update pressed state
-            r2Pressed = r2CurrentlyPressed;
+            // Handle L1 scope mode
+            if (l1JustPressed) {
+                startL1ScopeMode();
+            } else if (l1ScopeMode) {
+                handleL1ScopeMode();
+            }
             
-            // Launch if either bumper is pressed (single shots)
-            launch(rightBumperPressed || leftBumperPressed);
+            // Update pressed states
+            r2Pressed = r2CurrentlyPressed;
+            l1Pressed = l1CurrentlyPressed;
+            
+            // Launch if R1 is pressed (single shot with distance-based velocity)
+            launch(rightBumperPressed);
             
             // ========================================
             // STEP 9: GET JOYSTICK INPUT
@@ -501,14 +562,29 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
                     
                     // SIMPLIFIED: Manual teleop drive when not in automated mode
                     if (!automatedDrive) {
+                        // Calculate rotation input - use scope mode if active, otherwise manual control
+                        double rotationInput = -gamepad1.right_stick_x; // Default manual rotation
+                        
+                        if (l1ScopeMode) {
+                            // Scope mode: rotate in place using PedroPathing drive (zero X/Y, only rotation)
+                            if (follower != null) {
+                                follower.setTeleOpDrive(0.0, 0.0, scopeRotationCommand, false);
+                            }
+                        } else {
+                            // Use PedroPathing's setTeleOpDrive for normal manual control
+                            rotationInput = scopeRotationCommand; // unchanged for non-scope; will be rightStickX below
+                        }
+                        
                         // Use PedroPathing's setTeleOpDrive for smooth field-centric control
                         // This maintains odometry and Limelight tracking while allowing manual control
-                        follower.setTeleOpDrive(
-                            -gamepad1.left_stick_y,  // Forward/backward
-                            -gamepad1.left_stick_x,  // Strafe left/right  
-                            -gamepad1.right_stick_x, // Rotation
-                            false // Field-centric (false = field-centric, true = robot-centric)
-                        );
+                        if (!l1ScopeMode) {
+                            follower.setTeleOpDrive(
+                                -gamepad1.left_stick_y,  // Forward/backward
+                                -gamepad1.left_stick_x,  // Strafe left/right  
+                                rotationInput,           // Rotation (manual control)
+                                false // Field-centric (false = field-centric, true = robot-centric)
+                            );
+                        }
                         
                         // Update telemetry with motor powers from PedroPathing
                         double flPower = (frontLeft != null) ? frontLeft.getPower() : 0.0;
@@ -772,21 +848,21 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     }
     
     /**
-     * Get current target velocity based on shooting mode
-     * @return Target velocity for current shooting mode
+     * Get current target velocity based on shooting mode and Limelight distance
+     * @return Target velocity for current shooting mode and distance
      */
     private double getCurrentTargetVelocity() {
-        return (currentShootingMode == ShootingMode.LONG_DISTANCE) ? 
-            LONG_DISTANCE_TARGET_VELOCITY : LAUNCHER_TARGET_VELOCITY;
+        // Always use dynamic velocity calculation based on Limelight distance
+        return calculateDynamicVelocity();
     }
     
     /**
-     * Get current minimum velocity based on shooting mode
-     * @return Minimum velocity for current shooting mode
+     * Get current minimum velocity based on shooting mode and Limelight distance
+     * @return Minimum velocity for current shooting mode and distance
      */
     private double getCurrentMinVelocity() {
-        return (currentShootingMode == ShootingMode.LONG_DISTANCE) ? 
-            LONG_DISTANCE_MIN_VELOCITY : LAUNCHER_MIN_VELOCITY;
+        // Always use dynamic minimum velocity calculation based on Limelight distance
+        return currentCalculatedMinVelocity;
     }
     
     /**
@@ -808,7 +884,7 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         r2MotorStopped = false; // FIXED: Reset motor stopped state
         r2ServoTimer.reset();
         r2VelocityCheckTimer.reset(); // FIXED: Reset velocity check timer
-        currentShootingMode = ShootingMode.SHORT_DISTANCE;
+        currentShootingMode = ShootingMode.DISTANCE_BASED;
         
         telemetry.addData("DEBUG", "R2 PULSED FEEDING: Mode started - waiting for trigger velocity (will shoot " + R2_BALL_COUNT + " balls)");
         
@@ -827,157 +903,96 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     
     /**
      * Handle R2 pulsed feeding mode
-     * FIXED: Implements pulsed feeding for reliable 3-ball shooting
+     * Shoots 3 balls with velocity checks and brief motor stop for recovery
      */
     private void handleR2ThreeSecondMode() {
         if (!r2ThreeSecondMode) return;
-        
-        // FIXED: Only check velocity every 1 second to prevent PIDF interference
+
+        // Only check velocity every 1 second to avoid PIDF fighting
         if (r2VelocityCheckTimer.seconds() >= 1.0) {
-            r2VelocityCheckTimer.reset(); // Reset timer for next check
-            
-            // FIXED: Minimal velocity monitoring - only reset if significantly low
+            r2VelocityCheckTimer.reset();
             if (shooterMotor != null) {
                 double currentVel = Math.abs(shooterMotor.getVelocity());
                 double targetVel = getCurrentTargetVelocity();
-                double velocityTolerance = 100; // Increased tolerance to reduce resets
-                
-                // Only call setVelocity if velocity has dropped significantly (increased threshold)
+                double velocityTolerance = 100; // allow small droops
                 if (currentVel < (targetVel - velocityTolerance)) {
-                    try {
-                        shooterMotor.setVelocity(targetVel);
-                        telemetry.addData("DEBUG", "R2 PULSED: Velocity dropped to " + String.format("%.1f", currentVel) + ", resetting to " + targetVel);
-                    } catch (Exception e) {
-                        telemetry.addData("ERROR", "R2 PULSED: Failed to reset velocity: " + e.getMessage());
-                    }
-                } else {
-                    telemetry.addData("DEBUG", "R2 PULSED: Velocity stable at " + String.format("%.1f", currentVel) + " (target: " + targetVel + ")");
+                    try { shooterMotor.setVelocity(targetVel); } catch (Exception ignored) {}
                 }
             }
-        } else {
-            // Skip velocity check this loop - timer hasn't reached 1 second yet
-            telemetry.addData("DEBUG", "R2 PULSED: Skipping velocity check (timer: " + String.format("%.1f", r2VelocityCheckTimer.seconds()) + "s)");
         }
-        
-        // PULSED FEEDING LOGIC
+
+        // Wait for velocity lock before starting the sequence
         if (!r2VelocityReached) {
-            // Wait for target velocity before starting pulsed feeding
             double currentVel = shooterMotor != null ? Math.abs(shooterMotor.getVelocity()) : 0;
-            double targetVelocity = getCurrentTargetVelocity();
-            double effectiveTargetVelocity = targetVelocity * 0.95; // Same as R1 mode
-            
+            double effectiveTargetVelocity = getCurrentTargetVelocity() * 0.95;
             if (currentVel >= effectiveTargetVelocity) {
                 r2VelocityReached = true;
                 r2ServoTimer.reset();
-                telemetry.addData("DEBUG", "R2 PULSED: Effective target velocity reached (" + String.format("%.1f", currentVel) + " >= " + String.format("%.1f", effectiveTargetVelocity) + "), starting pulsed feeding");
-            } else {
-                telemetry.addData("DEBUG", "R2 PULSED: Waiting for effective target velocity (" + 
-                    String.format("%.1f", currentVel) + "/" + String.format("%.1f", effectiveTargetVelocity) + " effective target)");
+            }
+            return;
+        }
+
+        // Pulsed feeding sequence for 3 balls with motor recovery
+        if (r2BallsShot < R2_BALL_COUNT) {
+                if (!r2FeedingBall && !r2WaitingForVelocity && !r2MotorStopped) {
+                    // Extra wait before the 3rd shot to stabilize velocity
+                    if (r2BallsShot == 2 && r2ServoTimer.seconds() < 0.35) {
+                        // Wait additional 0.2s before starting final feed
+                        return;
+                    }
+                // Check velocity before feeding next ball
+                double currentVel = shooterMotor != null ? Math.abs(shooterMotor.getVelocity()) : 0;
+                double effectiveTargetVelocity = getCurrentTargetVelocity() * 0.95;
+                if (currentVel >= effectiveTargetVelocity) {
+                    if (leftServo != null && rightServo != null) {
+                        leftServo.setPower(FULL_SPEED);
+                        rightServo.setPower(FULL_SPEED);
+                        r2FeedingBall = true;
+                        r2ServoTimer.reset();
+                    } else {
+                        stopR2ThreeSecondMode("Servo error");
+                    }
+                } else {
+                    r2WaitingForVelocity = true;
+                    r2ServoTimer.reset();
+                }
+            } else if (r2WaitingForVelocity) {
+                // Wait until velocity recovers
+                double currentVel = shooterMotor != null ? Math.abs(shooterMotor.getVelocity()) : 0;
+                double effectiveTargetVelocity = getCurrentTargetVelocity() * 0.95;
+                if (currentVel >= effectiveTargetVelocity) {
+                    r2WaitingForVelocity = false;
+                }
+            } else if (r2FeedingBall) {
+                // Feed current ball for fixed time
+                if (r2ServoTimer.seconds() >= R2_BALL_FEED_TIME) {
+                    if (leftServo != null) leftServo.setPower(STOP_SPEED);
+                    if (rightServo != null) rightServo.setPower(STOP_SPEED);
+                    r2FeedingBall = false;
+                    r2BallsShot++;
+                    r2ServoTimer.reset();
+                    // Briefly stop motor for recovery if more balls remain
+                    if (r2BallsShot < R2_BALL_COUNT) {
+                        r2MotorStopped = true;
+                        if (shooterMotor != null) {
+                            try { shooterMotor.setVelocity(0); } catch (Exception ignored) {}
+                        }
+                    }
+                }
+            } else if (r2MotorStopped) {
+                // After short stop, restart motor and wait a moment
+                if (r2ServoTimer.seconds() >= R2_MOTOR_STOP_TIME) {
+                    r2MotorStopped = false;
+                    if (shooterMotor != null) {
+                        try { shooterMotor.setVelocity(getCurrentTargetVelocity()); } catch (Exception ignored) {}
+                    }
+                    r2ServoTimer.reset();
+                }
             }
         } else {
-            // Velocity reached - now handle pulsed feeding with motor stop/restart
-            if (r2BallsShot < R2_BALL_COUNT) {
-                // Still have balls to shoot
-                if (!r2FeedingBall && !r2WaitingForVelocity && !r2MotorStopped) {
-                    // Check velocity before feeding next ball
-                    double currentVel = shooterMotor != null ? Math.abs(shooterMotor.getVelocity()) : 0;
-                    double targetVelocity = getCurrentTargetVelocity();
-                    double effectiveTargetVelocity = targetVelocity * 0.95; // Same threshold as R1 mode
-                    
-                    if (currentVel >= effectiveTargetVelocity) {
-                        // Velocity is good - start feeding next ball
-                        if (leftServo != null && rightServo != null) {
-                            leftServo.setPower(FULL_SPEED);
-                            rightServo.setPower(FULL_SPEED);
-                            r2FeedingBall = true;
-                            r2ServoTimer.reset();
-                            telemetry.addData("DEBUG", "R2 PULSED: Velocity OK (" + String.format("%.1f", currentVel) + " >= " + String.format("%.1f", effectiveTargetVelocity) + ") - Starting to feed ball " + (r2BallsShot + 1) + "/" + R2_BALL_COUNT);
-                        } else {
-                            telemetry.addData("ERROR", "R2 PULSED: Servos not available");
-                            stopR2ThreeSecondMode("Servo error");
-                            return;
-                        }
-                    } else {
-                        // Velocity too low - wait for recovery
-                        r2WaitingForVelocity = true;
-                        r2ServoTimer.reset();
-                        telemetry.addData("DEBUG", "R2 PULSED: Velocity too low (" + String.format("%.1f", currentVel) + " < " + String.format("%.1f", effectiveTargetVelocity) + ") - waiting for recovery before ball " + (r2BallsShot + 1) + "/" + R2_BALL_COUNT);
-                    }
-                } else if (r2WaitingForVelocity) {
-                    // Waiting for velocity recovery
-                    double currentVel = shooterMotor != null ? Math.abs(shooterMotor.getVelocity()) : 0;
-                    double targetVelocity = getCurrentTargetVelocity();
-                    double effectiveTargetVelocity = targetVelocity * 0.95;
-                    
-                    if (currentVel >= effectiveTargetVelocity) {
-                        // Velocity recovered - ready to feed
-                        r2WaitingForVelocity = false;
-                        telemetry.addData("DEBUG", "R2 PULSED: Velocity recovered (" + String.format("%.1f", currentVel) + " >= " + String.format("%.1f", effectiveTargetVelocity) + ") - ready for ball " + (r2BallsShot + 1) + "/" + R2_BALL_COUNT);
-                    } else {
-                        // Still waiting for velocity recovery
-                        double waitTime = r2ServoTimer.seconds();
-                        telemetry.addData("DEBUG", "R2 PULSED: Waiting for velocity recovery (" + String.format("%.1f", currentVel) + "/" + String.format("%.1f", effectiveTargetVelocity) + ") - " + String.format("%.1f", waitTime) + "s");
-                    }
-                } else if (r2FeedingBall) {
-                    // Currently feeding a ball
-                    if (r2ServoTimer.seconds() >= R2_BALL_FEED_TIME) {
-                        // Ball feed time complete - stop servos
-                        if (leftServo != null) leftServo.setPower(STOP_SPEED);
-                        if (rightServo != null) rightServo.setPower(STOP_SPEED);
-                        r2FeedingBall = false;
-                        r2BallsShot++;
-                        r2ServoTimer.reset();
-                        
-                        // Stop motor briefly for recovery (except after last ball)
-                        if (r2BallsShot < R2_BALL_COUNT) {
-                            r2MotorStopped = true;
-                            if (shooterMotor != null) {
-                                try {
-                                    shooterMotor.setVelocity(0);
-                                    telemetry.addData("DEBUG", "R2 PULSED: Ball " + r2BallsShot + "/" + R2_BALL_COUNT + " fed, stopping motor briefly for recovery");
-                                } catch (Exception e) {
-                                    telemetry.addData("ERROR", "R2 PULSED: Failed to stop motor: " + e.getMessage());
-                                }
-                            }
-                        } else {
-                            // Last ball shot - start final pause
-                            telemetry.addData("DEBUG", "R2 PULSED: Ball " + r2BallsShot + "/" + R2_BALL_COUNT + " fed, starting final pause");
-                        }
-                    } else {
-                        // Still feeding current ball
-                        double feedTimeRemaining = R2_BALL_FEED_TIME - r2ServoTimer.seconds();
-                        telemetry.addData("DEBUG", "R2 PULSED: Feeding ball " + (r2BallsShot + 1) + "/" + R2_BALL_COUNT + " (" + String.format("%.2f", feedTimeRemaining) + "s remaining)");
-                    }
-                } else if (r2MotorStopped) {
-                    // Motor is briefly stopped for recovery
-                    if (r2ServoTimer.seconds() >= R2_MOTOR_STOP_TIME) {
-                        // Motor stop time complete - restart motor
-                        r2MotorStopped = false;
-                        if (shooterMotor != null) {
-                            try {
-                                shooterMotor.setVelocity(getCurrentTargetVelocity());
-                                telemetry.addData("DEBUG", "R2 PULSED: Motor restarted for ball " + (r2BallsShot + 1) + "/" + R2_BALL_COUNT);
-                            } catch (Exception e) {
-                                telemetry.addData("ERROR", "R2 PULSED: Failed to restart motor: " + e.getMessage());
-                            }
-                        }
-                        r2ServoTimer.reset();
-                    } else {
-                        // Still in motor stop period
-                        double stopTimeRemaining = R2_MOTOR_STOP_TIME - r2ServoTimer.seconds();
-                        telemetry.addData("DEBUG", "R2 PULSED: Motor stopped for recovery (" + String.format("%.2f", stopTimeRemaining) + "s remaining)");
-                    }
-                }
-            } else {
-                // All balls shot - check if pause time is complete
-                if (r2ServoTimer.seconds() >= R2_BALL_PAUSE_TIME) {
-                    // All balls shot and pause complete - stop everything
-                    stopR2ThreeSecondMode("All " + R2_BALL_COUNT + " balls shot successfully");
-                } else {
-                    // Pause after last ball
-                    double pauseTimeRemaining = R2_BALL_PAUSE_TIME - r2ServoTimer.seconds();
-                    telemetry.addData("DEBUG", "R2 PULSED: All balls shot, final pause (" + String.format("%.2f", pauseTimeRemaining) + "s remaining)");
-                }
+            // After last ball, pause briefly then stop
+            if (r2ServoTimer.seconds() >= R2_BALL_PAUSE_TIME) {
+                stopR2ThreeSecondMode("All balls shot");
             }
         }
     }
@@ -1011,6 +1026,211 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         launchState = LaunchState.IDLE;
         
         telemetry.addData("DEBUG", "R2 PULSED: Mode stopped - " + reason);
+    }
+    
+    /**
+     * Start L1 scope mode - automatic alignment to center AprilTag in Limelight frame (Ty-based)
+     */
+    private void startL1ScopeMode() {
+        if (limelight == null) {
+            telemetry.addData("ERROR", "L1 SCOPE: Limelight not available - cannot use scope mode");
+            scopeDebugActive = false;
+            scopeDebugStatus = "ERROR: Limelight not available";
+            return;
+        }
+        
+        // Ensure manual control so rotation can be applied immediately
+        automatedDrive = false;
+        currentPath = null;
+        telemetry.addData("DEBUG", "L1 SCOPE: Forcing manual control (automatedDrive=false)");
+        
+        // Get current Limelight result
+        LLResult result = limelight.getLatestResult();
+        if (result == null || !result.isValid()) {
+            telemetry.addData("ERROR", "L1 SCOPE: No valid Limelight data - cannot see AprilTag");
+            telemetry.addData("ERROR", "L1 SCOPE: Make sure Limelight can see the AprilTag");
+            scopeDebugActive = false;
+            scopeDebugStatus = "ERROR: No valid AprilTag data";
+            return;
+        }
+        
+        // Check if heading is already aligned
+        double ty = result.getTy();
+        if (Math.abs(ty) <= SCOPE_TY_TOLERANCE) {
+            telemetry.addData("DEBUG", "L1 SCOPE: Robot already aligned to AprilTag (ty=" + String.format("%.2f", ty) + "°)");
+            l1ScopeMode = true; // Still activate mode to show it's ready
+            scopeTimer.reset();
+            scopeDebugActive = true;
+            scopeDebugTy = ty;
+            scopeDebugRotation = 0.0;
+            scopeDebugTime = 0.0;
+            scopeDebugStatus = "ALIGNED at start";
+            return;
+        }
+        
+        // Initialize scope mode
+        l1ScopeMode = true;
+        scopeTimer.reset();
+        
+        telemetry.addData("DEBUG", "L1 SCOPE: Mode started - aligning robot to AprilTag");
+        telemetry.addData("DEBUG", "L1 SCOPE: Current ty=" + String.format("%.2f", ty) + 
+            "° (target: 0.0°, tolerance: ±" + String.format("%.1f", SCOPE_TY_TOLERANCE) + "°)");
+        telemetry.addData("DEBUG", "L1 SCOPE: ty<0 means target below center, ty>0 means target above center");
+
+        scopeDebugActive = true;
+        scopeDebugTy = ty;
+        scopeDebugRotation = 0.0;
+        scopeDebugTime = 0.0;
+        scopeDebugStatus = "STARTED";
+    }
+    
+    /**
+     * Handle L1 scope mode - automatically rotate to center AprilTag in Limelight frame (Ty-based)
+     */
+    private void handleL1ScopeMode() {
+        if (!l1ScopeMode) return;
+        
+        // Check timeout
+        if (scopeTimer.seconds() > SCOPE_TIMEOUT) {
+            stopL1ScopeMode("Timeout reached (" + String.format("%.1f", SCOPE_TIMEOUT) + "s)");
+            return;
+        }
+        
+        // Get current Limelight data
+        if (limelight == null) {
+            telemetry.addData("SCOPE", "ERROR: Limelight not available");
+            return;
+        }
+        
+        LLResult result = limelight.getLatestResult();
+        if (result == null || !result.isValid()) {
+            telemetry.addData("SCOPE", "WARNING: No valid AprilTag detected - cannot center");
+            telemetry.addData("SCOPE", "Make sure AprilTag is in view of Limelight camera");
+            return;
+        }
+        
+        // Read Limelight offsets
+        // ty: vertical offset (degrees) – per mounting, yaw rotation affects ty directly
+        // tx kept for possible future use but not used for rotation here
+        double ty = result.getTy();
+        
+        // Check if heading is aligned (within tolerance)
+        if (Math.abs(ty) <= SCOPE_TY_TOLERANCE) {
+            stopL1ScopeMode("Robot aligned to AprilTag! (ty=" + String.format("%.2f", ty) + "°)");
+            return;
+        }
+        
+        // Calculate rotation speed based on ty value using proportional control
+        // ty < 0: Target below → rotate one way
+        // ty > 0: Target above → rotate the other way
+        // Invert sign so rotation moves toward reducing ty (mount-dependent)
+        double rotationCommand = -ty * SCOPE_TY_GAIN; // Proportional control toward center
+        
+        // Clamp rotation speed to maximum and enforce a small minimum to ensure movement
+        rotationCommand = Math.max(-SCOPE_ROTATION_SPEED, Math.min(SCOPE_ROTATION_SPEED, rotationCommand));
+        double minRotate = 0.05; // ensure robot actually rotates, but slower
+        if (Math.abs(rotationCommand) < minRotate) {
+            rotationCommand = Math.copySign(minRotate, rotationCommand == 0.0 ? ty : rotationCommand);
+        }
+        
+        // Store rotation command for use in drive control
+        // (This will be used by the drive control section)
+        scopeRotationCommand = rotationCommand;
+        
+        // Update debug fields for compact telemetry
+        scopeDebugActive = true;
+        scopeDebugTy = ty;
+        scopeDebugRotation = rotationCommand;
+        scopeDebugTime = scopeTimer.seconds();
+        scopeDebugStatus = "ALIGNING (ty)";
+    }
+    
+    /**
+     * Stop L1 scope mode
+     */
+    private void stopL1ScopeMode(String reason) {
+        l1ScopeMode = false;
+        scopeRotationCommand = 0.0; // Reset rotation command when stopping
+        telemetry.addData("DEBUG", "L1 SCOPE: Mode stopped - " + reason);
+    }
+    
+    /**
+     * Normalize angle to [-π, π] range
+     * @param angle Angle in radians
+     * @return Normalized angle
+     */
+    private double normalizeAngle(double angle) {
+        while (angle > Math.PI) angle -= 2.0 * Math.PI;
+        while (angle < -Math.PI) angle += 2.0 * Math.PI;
+        return angle;
+    }
+    
+    /**
+     * Calculate dynamic shooter velocity based on actual distance to AprilTag
+     * Uses calculated distance from Limelight ta to interpolate between known velocity points
+     * Calibration: 36" = 1400 RPM, 114" = 1750 RPM
+     * @return Calculated target velocity
+     */
+    private double calculateDynamicVelocity() {
+        if (limelight == null) {
+            // Fallback to default short distance velocity if Limelight not available
+            return SHORT_DISTANCE_VELOCITY;
+        }
+        
+        LLResult result = limelight.getLatestResult();
+        if (result == null || !result.isValid()) {
+            // Fallback to default short distance velocity if no valid Limelight data
+            return SHORT_DISTANCE_VELOCITY;
+        }
+        
+        // Get the calculated distance from ta (uses the distance calculation we set up earlier)
+        double ta = result.getTa();
+        if (ta <= 0.0) {
+            return SHORT_DISTANCE_VELOCITY;
+        }
+        
+        // Calculate distance using the same method as the telemetry calibration section
+        double distanceCalibrationFactor = 50.0;
+        double baseDistance = distanceCalibrationFactor / Math.sqrt(Math.max(ta, 0.1));
+        
+        // Apply the same distance-dependent multiplier
+        double appliedMultiplier = 1.0;
+        if (baseDistance < 40.0) {
+            appliedMultiplier = 1.424;
+        } else if (baseDistance < 90.0) {
+            double slope = -0.00212;
+            appliedMultiplier = 1.42 + (baseDistance - 40.0) * slope;
+        } else {
+            double slope = -0.0030;
+            appliedMultiplier = 1.333 + (baseDistance - 81.0) * slope;
+            appliedMultiplier = Math.max(0.95, appliedMultiplier);
+        }
+        
+        double actualDistance = baseDistance * appliedMultiplier;
+        
+        // Clamp distance to our known calibration range
+        actualDistance = Math.max(SHORT_DISTANCE_INCHES, Math.min(LONG_DISTANCE_INCHES, actualDistance));
+        
+        // Calculate interpolation factor (0.0 = short distance, 1.0 = long distance)
+        double interpolationFactor = (actualDistance - SHORT_DISTANCE_INCHES) / 
+            (LONG_DISTANCE_INCHES - SHORT_DISTANCE_INCHES);
+        
+        // Interpolate between calibration points: 36" (1400 RPM) and 114" (1750 RPM)
+        double calculatedVelocity = SHORT_DISTANCE_VELOCITY + 
+            (LONG_DISTANCE_VELOCITY - SHORT_DISTANCE_VELOCITY) * interpolationFactor;
+        
+        // Clamp to our min/max velocity range
+        calculatedVelocity = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, calculatedVelocity));
+        
+        // Calculate corresponding minimum velocity (same interpolation, 95% of target)
+        double calculatedMinVelocity = calculatedVelocity * 0.95;
+        calculatedMinVelocity = Math.max(MIN_VELOCITY * 0.95, Math.min(MAX_VELOCITY * 0.95, calculatedMinVelocity));
+        
+        // Update current calculated velocities
+        currentCalculatedVelocity = calculatedVelocity;
+        currentCalculatedMinVelocity = calculatedMinVelocity;
+        
+        return calculatedVelocity;
     }
     
     /**
@@ -1055,167 +1275,91 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     private void updateTelemetry(double flPower, double frPower, double blPower, double brPower, double botHeading) {
         telemetry.clear();
         
-        // Header information
-        telemetry.addLine("=== NOV TELEOP RED ===");
-        telemetry.addData("Control Mode", "Field-Oriented Control");
-        telemetry.addData("Localization", "PedroPathing + AprilTag Corrections");
-        telemetry.addData("Limelight Status", limelight != null ? "CONNECTED" : "DISCONNECTED");
-        telemetry.addLine();
+        // Minimal driving telemetry: Limelight status, distance, and shooter velocity
+        telemetry.addLine("=== RED NOVTELEOP ===");
+        telemetry.addData("Limelight", limelight != null ? "CONNECTED" : "DISCONNECTED");
         
-        // Robot heading information
-        telemetry.addLine("--- ROBOT STATUS ---");
-        telemetry.addData("Heading (deg)", String.format("%.1f", Math.toDegrees(botHeading)));
-        telemetry.addData("Heading (rad)", String.format("%.3f", botHeading));
-        telemetry.addLine();
-        
-        // FIXED: PedroPathing coordinates - prominently displayed (with null checks)
-        telemetry.addLine("--- PEDROPATHING COORDINATES ---");
+        // PedroPathing pose (X, Y, Heading)
         if (follower != null) {
-            telemetry.addData("X Position", String.format("%.2f", follower.getPose().getX()));
-            telemetry.addData("Y Position", String.format("%.2f", follower.getPose().getY()));
-            telemetry.addData("Pose Valid", "YES (PedroPathing Active)");
-        } else {
-            telemetry.addData("X Position", "N/A (PedroPathing not available)");
-            telemetry.addData("Y Position", "N/A (PedroPathing not available)");
-            telemetry.addData("Pose Valid", "NO (PedroPathing not available)");
-        }
-        telemetry.addLine();
-        
-        // FIXED: PedroPathing status (with null checks) - simplified approach
-        telemetry.addLine("--- PATH FOLLOWING ---");
-        telemetry.addData("Automated Drive", automatedDrive ? "YES" : "NO");
-        telemetry.addData("Path Busy", (follower != null && follower.isBusy()) ? "YES" : "NO");
-        telemetry.addData("Current Path", currentPath != null ? "EXISTS" : "NULL");
-        telemetry.addData("Control Mode", automatedDrive ? "AUTONOMOUS" : "MANUAL");
-        telemetry.addData("Manual Control Active", !automatedDrive ? "YES" : "NO");
-        telemetry.addLine();
-        
-        // Motor power information
-        telemetry.addLine("--- MOTOR POWERS ---");
-        telemetry.addData("Front Left", String.format("%.3f", flPower));
-        telemetry.addData("Front Right", String.format("%.3f", frPower));
-        telemetry.addData("Back Left", String.format("%.3f", blPower));
-        telemetry.addData("Back Right", String.format("%.3f", brPower));
-        telemetry.addLine();
-        
-        // FIXED: Launcher information (with null checks)
-        telemetry.addLine("--- LAUNCHER STATUS ---");
-        telemetry.addData("Launch State", launchState.toString());
-        telemetry.addData("Shooting Mode", currentShootingMode.toString());
-        if (shooterMotor != null) {
-            telemetry.addData("Shooter Velocity", String.format("%.1f", shooterMotor.getVelocity()));
-            telemetry.addData("Abs Velocity", String.format("%.1f", Math.abs(shooterMotor.getVelocity())));
-            telemetry.addData("Shooter Power", String.format("%.3f", shooterMotor.getPower()));
-            telemetry.addData("Motor Mode", shooterMotor.getMode().toString());
-        } else {
-            telemetry.addData("Shooter Velocity", "N/A (Motor not available)");
-            telemetry.addData("Abs Velocity", "N/A (Motor not available)");
-            telemetry.addData("Shooter Power", "N/A (Motor not available)");
-            telemetry.addData("Motor Mode", "N/A (Motor not available)");
-        }
-        telemetry.addData("Target Velocity", getCurrentTargetVelocity() + " (" + currentShootingMode.toString() + ")");
-        telemetry.addData("Min Velocity", getCurrentMinVelocity());
-        telemetry.addData("Right Bumper", gamepad1.right_bumper ? "PRESSED" : "RELEASED");
-        telemetry.addData("Left Bumper", gamepad1.left_bumper ? "PRESSED" : "RELEASED");
-        telemetry.addData("R2 Trigger", String.format("%.2f", gamepad1.right_trigger));
-        
-        // R2 pulsed feeding mode status
-        telemetry.addLine("--- R2 PULSED FEEDING MODE ---");
-        telemetry.addData("R2 Mode Active", r2ThreeSecondMode ? "YES" : "NO");
-        if (r2ThreeSecondMode) {
-            telemetry.addData("Velocity Reached", r2VelocityReached ? "YES" : "NO");
-            telemetry.addData("Balls Shot", r2BallsShot + "/" + R2_BALL_COUNT);
-            telemetry.addData("Currently Feeding", r2FeedingBall ? "YES" : "NO");
-            telemetry.addData("Waiting for Velocity", r2WaitingForVelocity ? "YES" : "NO");
-            telemetry.addData("Motor Stopped", r2MotorStopped ? "YES" : "NO");
-            
-            // Show velocity monitoring for R2 mode (same as R1 mode)
-            if (shooterMotor != null) {
-                double actualVelocity = Math.abs(shooterMotor.getVelocity());
-                double targetVelocity = getCurrentTargetVelocity();
-                double effectiveTargetVelocity = targetVelocity * 0.95; // Same as R1 mode
-                telemetry.addData("R2 Velocity", String.format("%.1f/%.1f (effective: %.1f)", actualVelocity, targetVelocity, effectiveTargetVelocity));
-            }
-            
-            if (r2VelocityReached) {
-                if (r2BallsShot < R2_BALL_COUNT) {
-                    if (r2MotorStopped) {
-                        telemetry.addData("Status", "Motor stopped for recovery after ball " + r2BallsShot + "/" + R2_BALL_COUNT);
-                        telemetry.addData("Stop Time", String.format("%.2f/%.2fs", r2ServoTimer.seconds(), R2_MOTOR_STOP_TIME));
-                    } else if (r2WaitingForVelocity) {
-                        telemetry.addData("Status", "Waiting for velocity recovery before ball " + (r2BallsShot + 1) + "/" + R2_BALL_COUNT);
-                        telemetry.addData("Wait Time", String.format("%.1fs", r2ServoTimer.seconds()));
-                    } else if (r2FeedingBall) {
-                        double feedTimeRemaining = R2_BALL_FEED_TIME - r2ServoTimer.seconds();
-                        telemetry.addData("Status", "Feeding ball " + (r2BallsShot + 1) + "/" + R2_BALL_COUNT);
-                        telemetry.addData("Feed Time", String.format("%.2f/%.2fs", r2ServoTimer.seconds(), R2_BALL_FEED_TIME));
-                    } else {
-                        double pauseTimeRemaining = R2_BALL_PAUSE_TIME - r2ServoTimer.seconds();
-                        telemetry.addData("Status", "Pausing between balls");
-                        telemetry.addData("Pause Time", String.format("%.2f/%.2fs", r2ServoTimer.seconds(), R2_BALL_PAUSE_TIME));
-                    }
-                } else {
-                    double pauseTimeRemaining = R2_BALL_PAUSE_TIME - r2ServoTimer.seconds();
-                    telemetry.addData("Status", "All balls shot, final pause");
-                    telemetry.addData("Final Pause", String.format("%.2f/%.2fs", r2ServoTimer.seconds(), R2_BALL_PAUSE_TIME));
-                }
-            } else {
-                telemetry.addData("Status", "Waiting for initial target velocity...");
-            }
+            telemetry.addData("X", String.format("%.2f", follower.getPose().getX()));
+            telemetry.addData("Y", String.format("%.2f", follower.getPose().getY()));
+            telemetry.addData("Heading", String.format("%.1f°", Math.toDegrees(follower.getPose().getHeading())));
         }
         
-        if (leftServo != null) {
-            telemetry.addData("Left Servo Power", String.format("%.3f", leftServo.getPower()));
-        } else {
-            telemetry.addData("Left Servo Power", "N/A (Servo not available)");
-        }
-        if (rightServo != null) {
-            telemetry.addData("Right Servo Power", String.format("%.3f", rightServo.getPower()));
-        } else {
-            telemetry.addData("Right Servo Power", "N/A (Servo not available)");
-        }
-        telemetry.addLine();
-        
-        // Control instructions
-        telemetry.addLine("--- CONTROLS ---");
-        telemetry.addData("Left Stick Y", "Move Forward/Backward");
-        telemetry.addData("Left Stick X", "Strafe Left/Right");
-        telemetry.addData("Right Stick X", "Rotate Left/Right");
-        telemetry.addData("Right Bumper", "Single Short Distance Shot");
-        telemetry.addData("Left Bumper", "Single Long Distance Shot");
-        telemetry.addData("R2 Trigger", "3-Ball Pulsed Shot (Short Range)");
-        telemetry.addData("X Button", "Go to Close Range Scoring");
-        telemetry.addData("Y Button", "Go to Long Range Scoring");
-        telemetry.addData("A Button", "Go to Home Position");
-        telemetry.addData("B Button", "Cancel Automated Drive");
-        telemetry.addLine();
-        
-        // FIXED: Performance information (with null checks)
-        telemetry.addLine("--- PERFORMANCE ---");
-        telemetry.addData("PedroPathing Status", (follower != null && follower.isBusy()) ? "BUSY" : "IDLE");
-        telemetry.addData("Deadzone", JOYSTICK_DEADZONE);
-        telemetry.addData("Drive Power Multiplier", DRIVE_POWER_MULTIPLIER);
-        telemetry.addLine();
-        
-        // Limelight information
+        double distanceInches = 0.0;
+        boolean tagVisible = false;
+        double tyDisplay = Double.NaN;
         if (limelight != null) {
-            telemetry.addLine("--- LIMELIGHT VISION ---");
             LLResult result = limelight.getLatestResult();
             if (result != null && result.isValid()) {
-                telemetry.addData("Targets Detected", "YES");
-                telemetry.addData("tx", String.format("%.2f", result.getTx()));
-                telemetry.addData("ty", String.format("%.2f", result.getTy()));
-                Pose3D botpose = result.getBotpose();
-                telemetry.addData("Botpose", botpose.toString());
+                tagVisible = true;
+                double ta = result.getTa();
+                tyDisplay = result.getTy();
+                // RGB indicator logic: default ORANGE when tag is seen
+                if (rgb != null) {
+                    try {
+                        double desired = RGB_ORANGE;
+                        if (Math.abs(tyDisplay) <= 1.0) desired = RGB_GREEN; // centered within ±1°
+                        rgb.setPosition(desired);
+                    } catch (Exception ignored) {}
+                }
+                if (ta > 0.0) {
+                    // Same ta-based distance model with distance-dependent multiplier
+                    double distanceCalibrationFactor = 50.0;
+                    double baseDistance = distanceCalibrationFactor / Math.sqrt(Math.max(ta, 0.1));
+                    double appliedMultiplier;
+                    if (baseDistance < 40.0) {
+                        appliedMultiplier = 1.424;
+                    } else if (baseDistance < 90.0) {
+                        double slope = -0.00212;
+                        appliedMultiplier = 1.42 + (baseDistance - 40.0) * slope;
+                    } else {
+                        double slope = -0.0030;
+                        appliedMultiplier = Math.max(0.95, 1.333 + (baseDistance - 81.0) * slope);
+                    }
+                    distanceInches = baseDistance * appliedMultiplier;
+                }
             } else {
-                telemetry.addData("Targets Detected", "NO");
+                // No valid detection – set RED
+                if (rgb != null) {
+                    try { rgb.setPosition(RGB_RED); } catch (Exception ignored) {}
+                }
             }
-            telemetry.addLine();
+        } else {
+            // Limelight not available - show RED
+            if (rgb != null) {
+                try { rgb.setPosition(RGB_RED); } catch (Exception ignored) {}
+            }
+        }
+        telemetry.addData("Tag Visible", tagVisible ? "YES" : "NO");
+        if (!Double.isNaN(tyDisplay)) {
+            telemetry.addData("Limelight ty", String.format("%.2f°", tyDisplay));
+        } else {
+            // No tag - show RED
+            if (rgb != null) {
+                try { rgb.setPosition(RGB_RED); } catch (Exception ignored) {}
+            }
+        }
+        telemetry.addData("Distance to Tag", String.format("%.1f in", distanceInches));
+
+        // L1 scope debug (compact): show when scope was recently started/aligning/finished
+        if (scopeDebugActive || l1ScopeMode) {
+            telemetry.addLine("--- SCOPE DEBUG ---");
+            telemetry.addData("Active", l1ScopeMode ? "YES" : "NO");
+            if (!Double.isNaN(scopeDebugTy)) {
+                telemetry.addData("ty", String.format("%.2f°", scopeDebugTy));
+            }
+            telemetry.addData("rot", String.format("%.2f", scopeDebugRotation));
+            telemetry.addData("time", String.format("%.2fs", scopeDebugTime));
+            telemetry.addData("status", scopeDebugStatus);
         }
         
-        // Debug information section
-        telemetry.addLine("--- DEBUG INFO ---");
-        // Debug messages are already added above in the main loop
+        // Velocity tracking
+        double targetVelocity = getCurrentTargetVelocity();
+        telemetry.addData("Trigger Velocity", String.format("%.0f RPM", targetVelocity));
+        if (shooterMotor != null) {
+            telemetry.addData("Shooter Velocity", String.format("%.1f RPM", Math.abs(shooterMotor.getVelocity())));
+        }
         
         telemetry.update();
     }

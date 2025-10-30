@@ -32,7 +32,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.List;
 
 /**
- * NovTeleOpRed - Field-Oriented Control TeleOp Program with PedroPathing Integration
+ * NovTeleOpBlue - Field-Oriented Control TeleOp Program with PedroPathing Integration
  * 
  * This program provides smooth, field-oriented control using the GoBilda PinPoint IMU.
  * Field-oriented control means the robot moves relative to the field, not relative to the robot's current heading.
@@ -45,6 +45,13 @@ import java.util.List;
  * - Bulk reading for faster performance
  * - Easy-to-understand code with lots of comments
  * 
+ * IMPORTANT - BLUE SIDE CONTROL FIX:
+ * - When driving Blue side robot from Red side (opposite field side):
+ *   → Joystick Y and X inputs are inverted to account for robot facing toward driver
+ *   → This makes controls feel natural: forward moves robot away, backward moves it toward you
+ * - IMU and heading values are CORRECT - they represent robot's actual orientation
+ * - The fix ONLY applies to joystick input interpretation for driver experience
+ * 
  * Controls:
  * - Left Stick Y: Move forward/backward (field-relative)
  * - Left Stick X: Strafe left/right (field-relative)  
@@ -56,10 +63,10 @@ import java.util.List;
  * - A Button: Go to Home Position
  * 
  * @author Sahas Kumar
- * @version 3.0 - Removed Panels integration, fixed launcher and path following
+ * @version 3.1 - Fixed joystick input for Blue side when driving from opposite (Red) side
  */
-@TeleOp(name = "NovTeleOpRedSemiAuto", group = "TeleOp")
-public class NovTeleOpRedSemiAuto extends LinearOpMode {
+@TeleOp(name = "NovTeleOpBlueSemiAuto", group = "TeleOp")
+public class NovTeleOpBlueSemiAuto extends LinearOpMode {
 
     // Motor declarations
     private DcMotorEx frontLeft, frontRight, backLeft, backRight;
@@ -143,10 +150,10 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
     
     private ShootingMode currentShootingMode;
     
-    // Preset locations for panel integration
-    private final Pose closeRangePose = new Pose(82.192, 97.534, Math.toRadians(40)); // Close range scoring
-    private final Pose longRangePose = new Pose(80.219, 19.288, Math.toRadians(65));  // Long range scoring
-    private final Pose homePose = new Pose(18.192, 18.411, Math.toRadians(180));      // Home position
+    // Preset locations for panel integration (BLUE SIDE - mirrored coordinates)
+    private final Pose closeRangePose = new Pose(61.808, 97.534, Math.toRadians(140)); // Close range scoring
+    private final Pose longRangePose = new Pose(63.781, 19.288, Math.toRadians(115));  // Long range scoring
+    private final Pose homePose = new Pose(125.808, 18.411, Math.toRadians(0));      // Home position
     
     // Path following state management - simplified approach
     private boolean automatedDrive = false;
@@ -335,13 +342,14 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         
         // REMOVED: PanelsConfigurables initialization - no longer needed
         
-        // FIXED: Set starting pose (robot position after autonomous) with null check
-        // RED side: Heading 0° = facing away from driver (toward field) in PedroPathing coordinates
-        // This aligns with IMU calibration where robot faces away from driver = 0°
+        // FIXED: Set starting pose (robot position after autonomous) with null check - BLUE SIDE
+        // BLUE side: Heading 180° = facing toward driver in PedroPathing coordinates
+        // This is opposite of red side (0°) because robots are on opposite sides of field
+        // Both align with IMU calibration where robot faces away from driver = 0°
         if (follower != null) {
             try {
-                follower.setStartingPose(new Pose(81.096, 38.795, Math.toRadians(0)));
-                telemetry.addData("DEBUG", "Starting pose set successfully");
+                follower.setStartingPose(new Pose(62.904, 38.795, Math.toRadians(180)));
+                telemetry.addData("DEBUG", "Starting pose set successfully (Blue side)");
             } catch (Exception e) {
                 telemetry.addData("ERROR", "Failed to set starting pose: " + e.getMessage());
             }
@@ -372,7 +380,7 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         // ========================================
         // STEP 5: READY TO START
         // ========================================
-        telemetry.addData("Status", "NovTeleOpRed Ready!");
+        telemetry.addData("Status", "NovTeleOpBlue Ready!");
         telemetry.addData("Localization", "PedroPathing + Limelight Vision");
         telemetry.addData("Control Mode", "Field-Oriented Control");
         telemetry.addData("Instructions", "Use left stick to move, right stick X to rotate");
@@ -475,9 +483,11 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
             // STEP 9: GET JOYSTICK INPUT
             // ========================================
             // Read joystick values and apply deadzone to prevent drift
-            double y = applyAdvancedDeadzone(-gamepad1.left_stick_y); // Forward/backward
-            double x = applyAdvancedDeadzone(gamepad1.left_stick_x);  // Strafing
-            double rx = applyAdvancedDeadzone(gamepad1.right_stick_x); // Rotation
+            // FIXED: Invert Y and X inputs for Blue side when driver is on opposite (Red) side
+            // This ensures controls feel natural when robot is facing toward you
+            double y = applyAdvancedDeadzone(gamepad1.left_stick_y); // Forward/backward (inverted for Blue side)
+            double x = applyAdvancedDeadzone(-gamepad1.left_stick_x);  // Strafing (inverted for Blue side)
+            double rx = applyAdvancedDeadzone(-gamepad1.right_stick_x); // Rotation (keep inverted for consistency)
 
             // Square inputs for smoother control while preserving direction
             // This makes small movements more precise and large movements more responsive
@@ -501,14 +511,16 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
                     
                     // SIMPLIFIED: Manual teleop drive when not in automated mode
                     if (!automatedDrive) {
-                        // Use PedroPathing's setTeleOpDrive for smooth field-centric control
-                        // This maintains odometry and Limelight tracking while allowing manual control
-                        follower.setTeleOpDrive(
-                            -gamepad1.left_stick_y,  // Forward/backward
-                            -gamepad1.left_stick_x,  // Strafe left/right  
-                            -gamepad1.right_stick_x, // Rotation
-                            false // Field-centric (false = field-centric, true = robot-centric)
-                        );
+                    // Use PedroPathing's setTeleOpDrive for smooth field-centric control
+                    // This maintains odometry and Limelight tracking while allowing manual control
+                    // FIXED: Invert Y and X inputs for Blue side when driver is on opposite (Red) side
+                    // This ensures controls feel natural when robot is facing toward you
+                    follower.setTeleOpDrive(
+                        gamepad1.left_stick_y,   // Forward/backward (inverted for Blue side)
+                        gamepad1.left_stick_x,   // Strafe left/right (inverted for Blue side)
+                        -gamepad1.right_stick_x, // Rotation (keep same)
+                        false // Field-centric (false = field-centric, true = robot-centric)
+                    );
                         
                         // Update telemetry with motor powers from PedroPathing
                         double flPower = (frontLeft != null) ? frontLeft.getPower() : 0.0;
@@ -1013,6 +1025,7 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         telemetry.addData("DEBUG", "R2 PULSED: Mode stopped - " + reason);
     }
     
+    
     /**
      * Advanced deadzone function that scales remaining input
      * This prevents small joystick movements from causing unwanted robot movement
@@ -1056,7 +1069,7 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         telemetry.clear();
         
         // Header information
-        telemetry.addLine("=== NOV TELEOP RED ===");
+        telemetry.addLine("=== NOV TELEOP BLUE ===");
         telemetry.addData("Control Mode", "Field-Oriented Control");
         telemetry.addData("Localization", "PedroPathing + AprilTag Corrections");
         telemetry.addData("Limelight Status", limelight != null ? "CONNECTED" : "DISCONNECTED");
@@ -1358,3 +1371,4 @@ public class NovTeleOpRedSemiAuto extends LinearOpMode {
         }
     }
 }
+
