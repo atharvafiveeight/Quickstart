@@ -43,15 +43,15 @@ public class RED_SHORT_NOVAUTO extends OpMode {
     
     // Shooting timing and speed settings
     private final double FEED_TIME_SECONDS = 0.05;        // How long servos run to feed each ball
-    private final double FEED_DELAY_SECONDS = 2;          // Wait time between shots
-    private final double FINAL_LAUNCH_DELAY = 2.00;       // Extra wait after last ball
+    private final double FEED_DELAY_SECONDS = 1;          // Wait time between shots
+    private final double FINAL_LAUNCH_DELAY = 1;       // Extra wait after last ball
     private final double FULL_SPEED = 1.0;                // Maximum servo speed
     private final double STOP_SPEED = 0.0;                // Servo stopped
     
     // Shooter motor speed settings
-    private final double LAUNCHER_TARGET_VELOCITY = 1400; // Target speed for shooter motor
-    private final double LAUNCHER_MIN_VELOCITY = 1350;    // Minimum speed before shooting
-    private final int TOTAL_BALLS_TO_SCORE = 3;           // How many balls to shoot
+    private final double LAUNCHER_TARGET_VELOCITY = 1325; // Target speed for shooter motor
+    private final double LAUNCHER_MIN_VELOCITY = 1250;    // Minimum speed before shooting
+    private final int TOTAL_BALLS_TO_SCORE = 4;           // How many balls to shoot
     
     // Robot movement speed for autonomous (0.0 to 1.0)
     private double autonomousDriveSpeed = 0.3;            // 30% speed for precision

@@ -34,24 +34,24 @@ public class RED_LONG_NOV_AUTO extends OpMode {
     
     // Robot positions on the field (in inches) - MODIFIED FOR LONG DISTANCE
     private final Pose startPose = new Pose(86.793, 9.012, Math.toRadians(90)); // Where robot starts (NEW POSITION)
-    private final Pose scorePose = new Pose(80.219, 19.288, Math.toRadians(65)); // Long range scoring position
-    private final Pose startTeleopPose = new Pose(81.096, 38.795, Math.toRadians(0)); // Where robot ends (SAME AS SHORT)
+    private final Pose scorePose = new Pose(86.69767441860465, 20.093023255813957, Math.toRadians(65)); // Long range scoring position
+    private final Pose startTeleopPose = new Pose(85.5813953488372, 39.62790697674419, Math.toRadians(0)); // Where robot ends (SAME AS SHORT)
 
     // Paths the robot will follow
     private PathChain startToScore;    // Path from start to shooting position
     private PathChain scoreToTeleop;   // Path from shooting to final position
     
     // Shooting timing and speed settings
-    private final double FEED_TIME_SECONDS = 0.05;        // How long servos run to feed each ball
-    private final double FEED_DELAY_SECONDS = 2;          // Wait time between shots
-    private final double FINAL_LAUNCH_DELAY = 2.00;       // Extra wait after last ball
+    private final double FEED_TIME_SECONDS = 0.08;        // Increased slightly for reliable feeding
+    private final double FEED_DELAY_SECONDS = 1;          // Wait time between shots
+    private final double FINAL_LAUNCH_DELAY = 1;       // Extra wait after last ball
     private final double FULL_SPEED = 1.0;                // Maximum servo speed
     private final double STOP_SPEED = 0.0;                // Servo stopped
     
     // Shooter motor speed settings - MODIFIED FOR LONG DISTANCE
-    private final double LAUNCHER_TARGET_VELOCITY = 1750; // Target speed for long distance shooting
-    private final double LAUNCHER_MIN_VELOCITY = 1625;    // Minimum speed before shooting
-    private final int TOTAL_BALLS_TO_SCORE = 3;           // How many balls to shoot
+    private final double LAUNCHER_TARGET_VELOCITY = 1550; // Lowered to reduce overpowering
+    private final double LAUNCHER_MIN_VELOCITY = 1500;    // Adjusted accordingly
+    private final int TOTAL_BALLS_TO_SCORE = 4;           // How many balls to shoot
     
     // Robot movement speed for autonomous (0.0 to 1.0)
     private double autonomousDriveSpeed = 0.3;            // 30% speed for precision

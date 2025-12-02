@@ -39,14 +39,14 @@ public class BLUE_SHORT_NOVAUTO extends OpMode {
     private PathChain scoreToTeleop;
 
     private final double FEED_TIME_SECONDS = 0.05;
-    private final double FEED_DELAY_SECONDS = 2;
-    private final double FINAL_LAUNCH_DELAY = 2.00;
+    private final double FEED_DELAY_SECONDS = 1;
+    private final double FINAL_LAUNCH_DELAY = 0.75;
     private final double FULL_SPEED = 1.0;
     private final double STOP_SPEED = 0.0;
 
-    private final double LAUNCHER_TARGET_VELOCITY = 1400;
-    private final double LAUNCHER_MIN_VELOCITY = 1350;
-    private final int TOTAL_BALLS_TO_SCORE = 3;
+    private final double LAUNCHER_TARGET_VELOCITY = 1325;
+    private final double LAUNCHER_MIN_VELOCITY = 1250;
+    private final int TOTAL_BALLS_TO_SCORE = 4;
 
     private double autonomousDriveSpeed = 0.3;
 

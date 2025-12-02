@@ -564,17 +564,17 @@ public class RED_NOVTELEOP extends LinearOpMode {
                     if (!automatedDrive) {
                         // Calculate rotation input - use scope mode if active, otherwise manual control
                         double rotationInput = -gamepad1.right_stick_x; // Default manual rotation
-                        
+
                         if (l1ScopeMode) {
                             // Scope mode: rotate in place using PedroPathing drive (zero X/Y, only rotation)
                             if (follower != null) {
                                 follower.setTeleOpDrive(0.0, 0.0, scopeRotationCommand, false);
                             }
                         } else {
-                            // Use PedroPathing's setTeleOpDrive for normal manual control
-                            rotationInput = scopeRotationCommand; // unchanged for non-scope; will be rightStickX below
+                            // Normal manual control uses right stick X
+                            rotationInput = -gamepad1.right_stick_x;
                         }
-                        
+
                         // Use PedroPathing's setTeleOpDrive for smooth field-centric control
                         // This maintains odometry and Limelight tracking while allowing manual control
                         if (!l1ScopeMode) {

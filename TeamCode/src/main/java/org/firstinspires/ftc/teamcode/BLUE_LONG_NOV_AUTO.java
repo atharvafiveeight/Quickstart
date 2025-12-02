@@ -32,20 +32,20 @@ public class BLUE_LONG_NOV_AUTO extends OpMode {
 
     // Blue long: mirror RED long start, use Blue long scoring pose, end at BLUE teleop start
     private final Pose startPose = new Pose(57.207, 9.012, Math.toRadians(90));
-    private final Pose scorePose = new Pose(63.781, 19.288, Math.toRadians(115));
-    private final Pose startTeleopPose = new Pose(62.904, 38.795, Math.toRadians(180));
+    private final Pose scorePose = new Pose(59.16279069767442, 19.906976744186046, Math.toRadians(111.5));
+    private final Pose startTeleopPose = new Pose(58.23255813953488, 40.55813953488372, Math.toRadians(183));
 
     private PathChain startToScore;
     private PathChain scoreToTeleop;
 
-    private final double FEED_TIME_SECONDS = 0.05;
-    private final double FEED_DELAY_SECONDS = 2;
-    private final double FINAL_LAUNCH_DELAY = 2.00;
+    private final double FEED_TIME_SECONDS = 0.08; // Increased slightly for reliable feeding
+    private final double FEED_DELAY_SECONDS = 1;
+    private final double FINAL_LAUNCH_DELAY = 1;
     private final double FULL_SPEED = 1.0;
     private final double STOP_SPEED = 0.0;
 
-    private final double LAUNCHER_TARGET_VELOCITY = 1750;
-    private final double LAUNCHER_MIN_VELOCITY = 1625;
+    private final double LAUNCHER_TARGET_VELOCITY = 1550; // Lowered to reduce overpowering
+    private final double LAUNCHER_MIN_VELOCITY = 1500;    // Adjusted accordingly
     private final int TOTAL_BALLS_TO_SCORE = 3;
 
     private double autonomousDriveSpeed = 0.3;
