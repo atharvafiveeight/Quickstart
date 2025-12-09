@@ -70,7 +70,7 @@ public class Tuning extends SelectableOpMode {
             s.folder("Tests", p -> {
                 p.add("Line", Line::new);
                 p.add("Triangle", Triangle::new);
-                p.add("Circle", Circle::new);
+                p.add("Circle", CircleTuning::new);
             });
         });
     }
@@ -1131,7 +1131,7 @@ class Triangle extends OpMode {
  * @author Harrison Womack - 10158 Scott's Bots
  * @version 1.0, 3/12/2024
  */
-class Circle extends OpMode {
+class CircleTuning extends OpMode {
     public static double RADIUS = 10;
     private PathChain circle;
 

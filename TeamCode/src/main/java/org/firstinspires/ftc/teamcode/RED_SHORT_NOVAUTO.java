@@ -43,15 +43,15 @@ public class RED_SHORT_NOVAUTO extends OpMode {
     
     // Shooting timing and speed settings
     private final double FEED_TIME_SECONDS = 0.05;        // How long servos run to feed each ball
-    private final double FEED_DELAY_SECONDS = 1;          // Wait time between shots
-    private final double FINAL_LAUNCH_DELAY = 1;       // Extra wait after last ball
+    private final double FEED_DELAY_SECONDS = 2;          // Wait time between shots
+    private final double FINAL_LAUNCH_DELAY = 2.00;       // Extra wait after last ball
     private final double FULL_SPEED = 1.0;                // Maximum servo speed
     private final double STOP_SPEED = 0.0;                // Servo stopped
     
     // Shooter motor speed settings
-    private final double LAUNCHER_TARGET_VELOCITY = 1325; // Target speed for shooter motor
-    private final double LAUNCHER_MIN_VELOCITY = 1250;    // Minimum speed before shooting
-    private final int TOTAL_BALLS_TO_SCORE = 4;           // How many balls to shoot
+    private final double LAUNCHER_TARGET_VELOCITY = 1400; // Target speed for shooter motor
+    private final double LAUNCHER_MIN_VELOCITY = 1350;    // Minimum speed before shooting
+    private final int TOTAL_BALLS_TO_SCORE = 3;           // How many balls to shoot
     
     // Robot movement speed for autonomous (0.0 to 1.0)
     private double autonomousDriveSpeed = 0.3;            // 30% speed for precision
@@ -148,7 +148,8 @@ public class RED_SHORT_NOVAUTO extends OpMode {
     private void initializeLauncherHardware() {
         try {
             // Set up the shooter motor
-            shooterMotor = hardwareMap.get(DcMotorEx.class, Constants.SHOOTER_MOTOR_NAME);
+            // Using hardcoded hardware name instead of Constants (Constants.SHOOTER_MOTOR_NAME was removed)
+            shooterMotor = hardwareMap.get(DcMotorEx.class, "shooterMotor");
             shooterMotor.setDirection(DcMotorSimple.Direction.REVERSE);
             shooterMotor.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.BRAKE);
             shooterMotor.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
@@ -159,8 +160,9 @@ public class RED_SHORT_NOVAUTO extends OpMode {
                     new PIDFCoefficients(3, 0, 0, 10));
             
             // Set up the ball feeding servos
-            leftServo = hardwareMap.get(CRServo.class, Constants.LEFT_SERVO_NAME);
-            rightServo = hardwareMap.get(CRServo.class, Constants.RIGHT_SERVO_NAME);
+            // Using hardcoded hardware names instead of Constants (Constants.LEFT_SERVO_NAME and Constants.RIGHT_SERVO_NAME were removed)
+            leftServo = hardwareMap.get(CRServo.class, "leftServo");
+            rightServo = hardwareMap.get(CRServo.class, "rightServo");
             leftServo.setDirection(DcMotorSimple.Direction.FORWARD);
             rightServo.setDirection(DcMotorSimple.Direction.REVERSE);
             

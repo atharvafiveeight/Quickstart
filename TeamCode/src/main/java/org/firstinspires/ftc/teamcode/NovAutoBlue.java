@@ -188,7 +188,8 @@ public class NovAutoBlue extends OpMode {
     private void initializeLauncherHardware() {
         try {
             // Initialize shooter motor
-            shooterMotor = hardwareMap.get(DcMotorEx.class, Constants.SHOOTER_MOTOR_NAME);
+            // Using hardcoded hardware name instead of Constants (Constants.SHOOTER_MOTOR_NAME was removed)
+            shooterMotor = hardwareMap.get(DcMotorEx.class, "shooterMotor");
             shooterMotor.setDirection(DcMotorSimple.Direction.REVERSE);
             shooterMotor.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.BRAKE);
             shooterMotor.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
@@ -199,8 +200,9 @@ public class NovAutoBlue extends OpMode {
                     new PIDFCoefficients(300, 0, 0, 10));
             
             // Initialize servos
-            leftServo = hardwareMap.get(CRServo.class, Constants.LEFT_SERVO_NAME);
-            rightServo = hardwareMap.get(CRServo.class, Constants.RIGHT_SERVO_NAME);
+            // Using hardcoded hardware names instead of Constants (Constants.LEFT_SERVO_NAME and Constants.RIGHT_SERVO_NAME were removed)
+            leftServo = hardwareMap.get(CRServo.class, "leftServo");
+            rightServo = hardwareMap.get(CRServo.class, "rightServo");
             leftServo.setDirection(DcMotorSimple.Direction.FORWARD);
             rightServo.setDirection(DcMotorSimple.Direction.REVERSE);
             

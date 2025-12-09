@@ -106,13 +106,13 @@ public class RED_DEC_TELEOP extends LinearOpMode {
     private static final double INTAKE_SHOOTER_POWER = 0.85;   // Power when R1 pressed (helps feed ball)
     
     // Feed Motor Constants
-    private static final double FEED_MOTOR_POWER = 0.5;  // Power for feed motor when shooting
+    private static final double FEED_MOTOR_POWER = 0.9;  // Power for feed motor when shooting
     
     // Shooter Distance Constants
     private static final double SHORT_DISTANCE_INCHES = 36.0;   // Closest shooting distance (inches)
     private static final double LONG_DISTANCE_INCHES = 130.0;   // Farthest shooting distance (inches)
     private static final double SHORT_DISTANCE_VELOCITY = 1000.0;  // Shooter speed at close distance (RPM)
-    private static final double LONG_DISTANCE_VELOCITY = 1400.0;   // Shooter speed at far distance (RPM)
+    private static final double LONG_DISTANCE_VELOCITY = 1500.0;   // Shooter speed at far distance (RPM)
     private static final double MIN_VELOCITY = 800.0;   // Slowest allowed shooter speed (RPM)
     private static final double MAX_VELOCITY = 1700.0;  // Fastest allowed shooter speed (RPM)
     

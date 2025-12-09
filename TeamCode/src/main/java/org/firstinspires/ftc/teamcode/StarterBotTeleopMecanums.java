@@ -61,7 +61,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 @TeleOp(name = "StarterBotTeleopMecanums", group = "StarterBot")
 //@Disabled
 public class StarterBotTeleopMecanums extends OpMode {
-    final double FEED_TIME_SECONDS = 0.20; //The feeder servos run this long when a shot is requested.
+    final double FEED_TIME_SECONDS = 0.05; //The feeder servos run this long when a shot is requested.
     final double STOP_SPEED = 0.0; //We send this power to the servos when we want them to stop.
     final double FULL_SPEED = 1.0;
 
@@ -71,8 +71,8 @@ public class StarterBotTeleopMecanums extends OpMode {
      * velocity. Here we are setting the target, and minimum velocity that the launcher should run
      * at. The minimum velocity is a threshold for determining when to fire.
      */
-    final double LAUNCHER_TARGET_VELOCITY = 1125;
-    final double LAUNCHER_MIN_VELOCITY = 1075;
+    final double LAUNCHER_TARGET_VELOCITY = 1250;
+    final double LAUNCHER_MIN_VELOCITY = 1200;
 
     // Declare OpMode members.
   
@@ -142,7 +142,15 @@ public class StarterBotTeleopMecanums extends OpMode {
         leftServo.setPower(STOP_SPEED);
         rightServo.setPower(STOP_SPEED);
 
-        shooterMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(300, 0, 0, 10));
+        // PIDF coefficients for velocity control - GoBilda 6000rpm motor
+        // P=150, I=0, D=0, F=10 (reduced from 300 to prevent overshooting)
+        // If motor overshoots target velocity, try reducing P value further (e.g., 100 or 75)
+        // If motor is slow to reach target, try increasing P value
+        shooterMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(3, 0, 100, 10));
+        
+        // Debug: Verify motor is in correct mode for velocity control
+        telemetry.addData("DEBUG", "Motor mode set to: " + shooterMotor.getMode());
+        telemetry.addData("DEBUG", "PIDF coefficients set for GoBilda 6000rpm motor");
 
         /*
          * Much like our drivetrain motors, we set the left feeder servo to reverse so that they
@@ -183,8 +191,12 @@ public class StarterBotTeleopMecanums extends OpMode {
          */
         if (gamepad1.y) {
             shooterMotor.setVelocity(LAUNCHER_TARGET_VELOCITY);
+            telemetry.addData("DEBUG", "Y pressed: setVelocity(" + LAUNCHER_TARGET_VELOCITY + ") called");
         } else if (gamepad1.b) { // stop flywheel
             shooterMotor.setVelocity(STOP_SPEED);
+            telemetry.addData("DEBUG", "B pressed: setVelocity(" + STOP_SPEED + ") called, resetting state to IDLE");
+            // Reset launch state to IDLE when manually stopping
+            launchState = LaunchState.IDLE;
         }
 
         /*
@@ -196,7 +208,33 @@ public class StarterBotTeleopMecanums extends OpMode {
          * Show the state and motor powers
          */
         telemetry.addData("State", launchState);
-        telemetry.addData("motorSpeed", shooterMotor.getVelocity());
+        telemetry.addData("Current Velocity", shooterMotor.getVelocity());
+        telemetry.addData("Abs Velocity", Math.abs(shooterMotor.getVelocity()));
+        telemetry.addData("Target Velocity", LAUNCHER_TARGET_VELOCITY);
+        telemetry.addData("Min Velocity", LAUNCHER_MIN_VELOCITY);
+        
+        // Only show velocity error when motor is actually running
+        double absVelocity = Math.abs(shooterMotor.getVelocity());
+        if (launchState != LaunchState.IDLE || absVelocity > 0) {
+            telemetry.addData("Velocity Error", LAUNCHER_TARGET_VELOCITY - absVelocity);
+        } else {
+            telemetry.addData("Velocity Error", "Motor stopped");
+        }
+        
+        telemetry.addData("Motor Power", shooterMotor.getPower());
+        telemetry.addData("Motor Mode", shooterMotor.getMode());
+        
+        // Debug: Show if velocity control is working (fixed logic using absolute value)
+        double currentVel = Math.abs(shooterMotor.getVelocity());
+        if (currentVel > LAUNCHER_TARGET_VELOCITY + 50) {
+            telemetry.addData("Status", "WARNING: Motor overshooting target velocity!");
+        } else if (currentVel >= LAUNCHER_TARGET_VELOCITY - 25 && currentVel <= LAUNCHER_TARGET_VELOCITY + 25) {
+            telemetry.addData("Status", "Motor at target velocity");
+        } else if (currentVel < LAUNCHER_TARGET_VELOCITY - 50) {
+            telemetry.addData("Status", "Motor below target velocity");
+        } else {
+            telemetry.addData("Status", "Motor approaching target velocity");
+        }
 
     }
 
@@ -212,12 +250,21 @@ public class StarterBotTeleopMecanums extends OpMode {
             case IDLE:
                 if (shotRequested) {
                     launchState = LaunchState.SPIN_UP;
+                    telemetry.addData("DEBUG", "Launch requested - entering SPIN_UP");
                 }
                 break;
             case SPIN_UP:
                 shooterMotor.setVelocity(LAUNCHER_TARGET_VELOCITY);
-                if (shooterMotor.getVelocity() > LAUNCHER_MIN_VELOCITY) {
+                double currentVel = Math.abs(shooterMotor.getVelocity()); // Use absolute value
+                telemetry.addData("DEBUG", "SPIN_UP: setVelocity(" + LAUNCHER_TARGET_VELOCITY + ") called");
+                telemetry.addData("DEBUG", "SPIN_UP: Current velocity = " + shooterMotor.getVelocity() + " (abs: " + currentVel + ")");
+                telemetry.addData("DEBUG", "SPIN_UP: Need " + LAUNCHER_MIN_VELOCITY + " to launch");
+                // Check if motor has reached minimum velocity for launching (using absolute value)
+                if (currentVel >= LAUNCHER_MIN_VELOCITY) {
                     launchState = LaunchState.LAUNCH;
+                    telemetry.addData("DEBUG", "Velocity reached - entering LAUNCH");
+                } else {
+                    telemetry.addData("DEBUG", "Still spinning up... (" + currentVel + "/" + LAUNCHER_MIN_VELOCITY + ")");
                 }
                 break;
             case LAUNCH:
@@ -225,12 +272,14 @@ public class StarterBotTeleopMecanums extends OpMode {
                 rightServo.setPower(FULL_SPEED);
                 feederTimer.reset();
                 launchState = LaunchState.LAUNCHING;
+                telemetry.addData("DEBUG", "LAUNCH: Servos activated, entering LAUNCHING");
                 break;
             case LAUNCHING:
                 if (feederTimer.seconds() > FEED_TIME_SECONDS) {
                     launchState = LaunchState.IDLE;
                     leftServo.setPower(STOP_SPEED);
                     rightServo.setPower(STOP_SPEED);
+                    telemetry.addData("DEBUG", "LAUNCHING: Feed complete, returning to IDLE");
                 }
                 break;
         }

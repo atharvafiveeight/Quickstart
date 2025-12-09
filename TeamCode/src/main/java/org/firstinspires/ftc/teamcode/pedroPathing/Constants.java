@@ -17,14 +17,14 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 public class Constants {
     public static FollowerConstants followerConstants = new FollowerConstants()
-            .mass(8.30)
-            .forwardZeroPowerAcceleration(-44.192939666537654)
-            .lateralZeroPowerAcceleration(-62.68202926514 )
-            .translationalPIDFCoefficients(new PIDFCoefficients(0.1,0,0.01,0))
-            .headingPIDFCoefficients(new PIDFCoefficients(1,0,0.01,0))
-            .drivePIDFCoefficients(new FilteredPIDFCoefficients(0.025,0,0.00001,0.6,0.01));
+            .mass(10.70)
+            .forwardZeroPowerAcceleration(-41.472924079915664)
+            .lateralZeroPowerAcceleration(-64.59650945979014 )
+            .translationalPIDFCoefficients(new PIDFCoefficients(0.1,0,0.01,0.015))
+            .headingPIDFCoefficients(new PIDFCoefficients(0.7,0,0.002,0.02))
+            .drivePIDFCoefficients(new FilteredPIDFCoefficients(0.04,0,0.00001,0.6,0.025));
 
-    public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
+    public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1.4, 1);
     public static MecanumConstants driveConstants = new MecanumConstants()
             .maxPower(1)
             .rightFrontMotorName("frontRight")
@@ -35,12 +35,11 @@ public class Constants {
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
             .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD)
-            .xVelocity(80.05627249169538)
-            .yVelocity(43.22688161294292);
-
+            .xVelocity(61.780347929226124)
+            .yVelocity(46.77743121770423);
     public static PinpointConstants localizerConstants = new PinpointConstants()
-            .forwardPodY(-3.622)
-            .strafePodX(-3.976)
+            .forwardPodY(-7.25)
+            .strafePodX(-1.375)
             .distanceUnit(DistanceUnit.INCH)
             .hardwareMapName("odo")
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
@@ -48,9 +47,7 @@ public class Constants {
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
     
     // Launcher hardware names for autonomous routines
-    public static final String SHOOTER_MOTOR_NAME = "shooterMotor";
-    public static final String LEFT_SERVO_NAME = "leftServo";
-    public static final String RIGHT_SERVO_NAME = "rightServo";
+
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
                 .pathConstraints(pathConstraints)

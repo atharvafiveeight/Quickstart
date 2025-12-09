@@ -112,7 +112,7 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
     private static final double SHORT_DISTANCE_INCHES = 36.0;   // Closest shooting distance (inches)
     private static final double LONG_DISTANCE_INCHES = 130.0;   // Farthest shooting distance (inches)
     private static final double SHORT_DISTANCE_VELOCITY = 1000.0;  // Shooter speed at close distance (RPM)
-    private static final double LONG_DISTANCE_VELOCITY = 1400.0;   // Shooter speed at far distance (RPM)
+    private static final double LONG_DISTANCE_VELOCITY = 1500.0;   // Shooter speed at far distance (RPM) - Increased by 50 RPM
     private static final double MIN_VELOCITY = 800.0;   // Slowest allowed shooter speed (RPM)
     private static final double MAX_VELOCITY = 1700.0;  // Fastest allowed shooter speed (RPM)
     
@@ -121,6 +121,11 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
     private static final double REDUCTION_TAPER_DISTANCE = 80.0;       // Distance where reduction stops (inches)
     private static final double LONG_DISTANCE_RPM_INCREASE = 100.0;    // Add this much speed for far shots (RPM)
     private static final double INCREASE_START_DISTANCE = 114.0;       // Distance where increase starts (inches)
+    
+    // Distance-specific corrections (based on testing)
+    private static final double CORRECTION_DISTANCE_CENTER = 117.0;     // Distance where correction is applied (inches)
+    private static final double CORRECTION_DISTANCE_RANGE = 2.0;        // Range around center distance (±inches)
+    private static final double CORRECTION_RPM_REDUCTION = 25.0;       // RPM to reduce at correction distance
     
     // Shooter Velocity Curve (Polynomial)
     // These numbers control how shooter speed changes between close and far distances
@@ -1044,6 +1049,18 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
         // Increase speed for far shots (helps reach target)
         if (actualDistance >= INCREASE_START_DISTANCE) {
             calculatedVelocity += LONG_DISTANCE_RPM_INCREASE;
+        }
+        
+        // Apply distance-specific correction for far shots (reduce RPM at 117 inches by 25 RPM)
+        // Only applies when in the far shot range (above INCREASE_START_DISTANCE)
+        if (actualDistance >= INCREASE_START_DISTANCE) {
+            double distanceFromCorrection = Math.abs(actualDistance - CORRECTION_DISTANCE_CENTER);
+            if (distanceFromCorrection <= CORRECTION_DISTANCE_RANGE) {
+                // Apply correction with smooth taper (full correction at center, tapering to edges)
+                double correctionFactor = 1.0 - (distanceFromCorrection / CORRECTION_DISTANCE_RANGE);
+                double correctionAmount = CORRECTION_RPM_REDUCTION * correctionFactor;
+                calculatedVelocity -= correctionAmount;
+            }
         }
         
         // Keep velocity within safe limits
