@@ -699,6 +699,10 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
             // tx > 0: Target to the right → rotate right (positive rotation)
             double tx = result.getTx();
             
+            // Auto-correct adjustment: Subtract 3 degrees to compensate for shooting right
+            // This shifts the alignment target 3 degrees to the left
+            tx = tx - 3.0;
+            
             // Check if heading is aligned (within tolerance)
             if (Math.abs(tx) <= AUTO_ALIGN_TX_TOLERANCE) {
                 // Aligned! Stop rotation but keep mode active
@@ -750,6 +754,11 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
         
         // Check if already aligned
         double tx = result.getTx();
+        
+        // Auto-correct adjustment: Subtract 3 degrees to compensate for shooting right
+        // This shifts the alignment target 3 degrees to the left
+        tx = tx - 3.0;
+        
         if (Math.abs(tx) <= AUTO_ALIGN_TX_TOLERANCE) {
             telemetry.addData("AUTO-ALIGN", "Already aligned! (tx=" + String.format("%.2f", tx) + "°)");
             autoAlignMode = true;

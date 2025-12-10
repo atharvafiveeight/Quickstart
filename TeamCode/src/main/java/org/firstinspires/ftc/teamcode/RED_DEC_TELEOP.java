@@ -106,13 +106,14 @@ public class RED_DEC_TELEOP extends LinearOpMode {
     private static final double INTAKE_SHOOTER_POWER = 0.85;   // Power when R1 pressed (helps feed ball)
     
     // Feed Motor Constants
-    private static final double FEED_MOTOR_POWER = 0.9;  // Power for feed motor when shooting
+    private static final double FEED_MOTOR_POWER = 0.8;  // Power for feed motor when shooting
     
     // Shooter Distance Constants
     private static final double SHORT_DISTANCE_INCHES = 36.0;   // Closest shooting distance (inches)
     private static final double LONG_DISTANCE_INCHES = 130.0;   // Farthest shooting distance (inches)
-    private static final double SHORT_DISTANCE_VELOCITY = 1000.0;  // Shooter speed at close distance (RPM)
-    private static final double LONG_DISTANCE_VELOCITY = 1500.0;   // Shooter speed at far distance (RPM)
+    private static final double SHORT_DISTANCE_VELOCITY = 950.0;  // Shooter speed at close distance (RPM)
+    private static final double LONG_DISTANCE_VELOCITY = 1350.0;   // S
+    // hooter speed at far distance (RPM)
     private static final double MIN_VELOCITY = 800.0;   // Slowest allowed shooter speed (RPM)
     private static final double MAX_VELOCITY = 1700.0;  // Fastest allowed shooter speed (RPM)
     
@@ -385,7 +386,7 @@ public class RED_DEC_TELEOP extends LinearOpMode {
                 // Note: These values match Constants.localizerConstants configuration
                 try {
                     // Set odometry pod offsets (matching Constants.java values)
-                    // forwardPodY = -3.622 inches, strafePodX = -3.976 inches
+                // forwardPodY = -3.6A22 inches, strafePodX = -3.976 inches
                     odo.setOffsets(-3.976, -3.622, DistanceUnit.INCH);
                     
                     // Set encoder resolution for 4-bar pod
