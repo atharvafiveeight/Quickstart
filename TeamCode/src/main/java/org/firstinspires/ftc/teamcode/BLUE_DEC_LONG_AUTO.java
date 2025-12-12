@@ -422,11 +422,11 @@ public class BLUE_DEC_LONG_AUTO extends OpMode {
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(111))
                 .build();
             
-            // End pose (park) - keep existing end pose logic or remove if not needed
-            // Using same end position as before for consistency
+            // End pose (park) - move to final parking position
+            // From shootPose3 end position (58.419, 16.186) to parking spot (15.814, 8.930)
             endPose = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(58.419, 16.186), new Pose(58.419, 16.186)))
-                .setLinearHeadingInterpolation(Math.toRadians(111), Math.toRadians(111))
+                .addPath(new BezierLine(new Pose(59.419, 16.186), new Pose(15.814, 8.930)))
+                .setLinearHeadingInterpolation(Math.toRadians(111), Math.toRadians(180))
                 .build();
             
             telemetry.addData("DEBUG", "All paths built successfully");

@@ -21,6 +21,14 @@ android {
     packagingOptions {
         jniLibs.useLegacyPackaging true
     }
+    
+    // Disable split APKs to build a universal APK that works on all devices
+    // This fixes the "none of the split apks are compatible" error
+    splits {
+        abi {
+            enable false
+        }
+    }
 }
 
 dependencies {

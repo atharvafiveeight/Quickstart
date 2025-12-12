@@ -98,15 +98,15 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
     // Drive Control Constants
     private static final double JOYSTICK_DEADZONE = 0.10;  // Ignore small joystick movements to prevent drift
     private static final double MIN_MOTOR_POWER = 0.12;    // Minimum power needed to make motors move
-    private static final double DRIVE_POWER_MULTIPLIER = 0.95;  // Overall speed control (0.95 = 95% speed)
+    private static final double DRIVE_POWER_MULTIPLIER = 0.9;  // Overall speed control (0.9 = 90% speed)
     
     // Intake Motor Constants
     private static final double INTAKE_FORWARD_POWER = 0.95;  // Power when L1 button pressed (forward)
     private static final double INTAKE_REVERSE_POWER = 0.85;  // Power when L2 trigger pressed (reverse)
     private static final double INTAKE_SHOOTER_POWER = 0.85;   // Power when R1 pressed (helps feed ball)
     
-    // Feed Motor Constants - now dynamic based on R1 (0.8) or R2 (0.5)
-    // Feed motor power is set dynamically: R1 (right bumper) = 0.8, R2 (right trigger) = 0.5
+    // Feed Motor Constants - now dynamic based on R1 (0.8) or R2 (0.4)
+    // Feed motor power is set dynamically: R1 (right bumper) = 0.8, R2 (right trigger) = 0.4
     
     // Shooter Distance Constants
     private static final double SHORT_DISTANCE_INCHES = 36.0;   // Closest shooting distance (inches)
@@ -158,7 +158,7 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
     
     // Dynamic velocity calculation (updated based on limelight distance)
     private double currentCalculatedVelocity = SHOOTER_TARGET_VELOCITY; // Current target velocity
-    private double currentFeedMotorPower = 0.5;  // Current feed motor power (set by R1=0.8 or R2=0.5)
+    private double currentFeedMotorPower = 0.4;  // Current feed motor power (set by R1=0.8 or R2=0.4)
     
     // ========================================
     // SHOOTER STATE MACHINE
@@ -805,7 +805,7 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
         if (r1CurrentlyPressed) {
             currentFeedMotorPower = 0.8;  // R1 uses 0.8 power
         } else if (r2CurrentlyPressed) {
-            currentFeedMotorPower = 0.5;  // R2 uses 0.5 power
+            currentFeedMotorPower = 0.4;  // R2 uses 0.4 power
         }
         
         // Update state machine based on shooter button and shooter state
@@ -923,7 +923,7 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
                 if (r1CurrentlyPressed) {
                     currentFeedMotorPower = 0.8;
                 } else if (r2CurrentlyPressed) {
-                    currentFeedMotorPower = 0.5;
+                    currentFeedMotorPower = 0.4;
                 }
                 
                 // Update feed motor power in case it changed
