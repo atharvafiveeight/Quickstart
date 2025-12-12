@@ -105,8 +105,8 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
     private static final double INTAKE_REVERSE_POWER = 0.85;  // Power when L2 trigger pressed (reverse)
     private static final double INTAKE_SHOOTER_POWER = 0.85;   // Power when R1 pressed (helps feed ball)
     
-    // Feed Motor Constants
-    private static final double FEED_MOTOR_POWER = 0.5;  // Power for feed motor when shooting
+    // Feed Motor Constants - now dynamic based on R1 (0.8) or R2 (0.5)
+    // Feed motor power is set dynamically: R1 (right bumper) = 0.8, R2 (right trigger) = 0.5
     
     // Shooter Distance Constants
     private static final double SHORT_DISTANCE_INCHES = 36.0;   // Closest shooting distance (inches)
@@ -158,6 +158,7 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
     
     // Dynamic velocity calculation (updated based on limelight distance)
     private double currentCalculatedVelocity = SHOOTER_TARGET_VELOCITY; // Current target velocity
+    private double currentFeedMotorPower = 0.5;  // Current feed motor power (set by R1=0.8 or R2=0.5)
     
     // ========================================
     // SHOOTER STATE MACHINE
@@ -641,8 +642,8 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
         else if (gamepad1.left_trigger > 0.1) {
             intakeMotor.setPower(-INTAKE_REVERSE_POWER);
         }
-        // If shooter is feeding (R1 active), run intake to help feed ball
-        else if (shooterState == ShooterState.FEEDING && gamepad1.right_bumper) {
+        // If shooter is feeding (R1 or R2 active), run intake to help feed ball
+        else if (shooterState == ShooterState.FEEDING && (gamepad1.right_bumper || gamepad1.right_trigger > 0.1)) {
             intakeMotor.setPower(INTAKE_SHOOTER_POWER);
         }
         // No button pressed: Stop intake
@@ -656,10 +657,10 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
      * Starts when R1 is pressed and Limelight sees an AprilTag
      */
     private void handleAutoAlign() {
-        boolean r1CurrentlyPressed = gamepad1.right_bumper;
+        // Start auto-align when R1 or R2 is pressed and Limelight sees AprilTag
+        boolean r1CurrentlyPressed = gamepad1.right_bumper || gamepad1.right_trigger > 0.1;
         boolean r1JustPressed = r1CurrentlyPressed && !r1Pressed;
         
-        // Start auto-align when R1 is pressed and Limelight sees AprilTag
         if (r1JustPressed && !autoAlignMode) {
             startAutoAlign();
         }
@@ -672,9 +673,9 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
                 return;
             }
             
-            // Check if R1 is still pressed
+            // Check if shooter button is still pressed
             if (!r1CurrentlyPressed) {
-                stopAutoAlign("R1 released");
+                stopAutoAlign("Shooter button released");
                 return;
             }
             
@@ -794,14 +795,23 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
     private void handleShooterControls() {
         if (shooterMotorLeft == null || shooterMotorRight == null) return;
         
-        // Detect R1 button press (edge detection)
+        // Detect R1 (right bumper) or R2 (right trigger) button press (edge detection)
         boolean r1CurrentlyPressed = gamepad1.right_bumper;
-        boolean r1JustPressed = r1CurrentlyPressed && !r1Pressed;
+        boolean r2CurrentlyPressed = gamepad1.right_trigger > 0.1;  // R2 trigger pressed
+        boolean shooterButtonPressed = r1CurrentlyPressed || r2CurrentlyPressed;  // Either button pressed
+        boolean shooterButtonJustPressed = shooterButtonPressed && !r1Pressed;
         
-        // Update state machine based on R1 button and shooter state
+        // Determine feed motor power based on which button is pressed
+        if (r1CurrentlyPressed) {
+            currentFeedMotorPower = 0.8;  // R1 uses 0.8 power
+        } else if (r2CurrentlyPressed) {
+            currentFeedMotorPower = 0.5;  // R2 uses 0.5 power
+        }
+        
+        // Update state machine based on shooter button and shooter state
         switch (shooterState) {
             case IDLE:
-                if (r1JustPressed) {
+                if (shooterButtonJustPressed) {
                     // Calculate dynamic velocity based on Limelight distance
                     double targetVelocity = calculateDynamicVelocity();
                     currentCalculatedVelocity = targetVelocity;
@@ -856,10 +866,10 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
                     telemetry.addData("ERROR", "Failed to read shooter velocity: " + e.getMessage());
                 }
                 
-                // If R1 is released, stop shooters and auto-align
-                if (!r1CurrentlyPressed) {
+                // If shooter button is released, stop shooters and auto-align
+                if (!shooterButtonPressed) {
                     stopShooter();
-                    stopAutoAlign("R1 released");
+                    stopAutoAlign("Shooter button released");
                 }
                 break;
                 
@@ -879,10 +889,10 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
                 // Start feeding when ready
                 shooterState = ShooterState.FEEDING;
                 
-                // Start feed motor
+                // Start feed motor with power based on which button is pressed
                 if (feedMotor != null) {
-                    feedMotor.setPower(FEED_MOTOR_POWER);
-                    telemetry.addData("DEBUG", "Shooter: Feed motor started");
+                    feedMotor.setPower(currentFeedMotorPower);
+                    telemetry.addData("DEBUG", "Shooter: Feed motor started at " + String.format("%.1f", currentFeedMotorPower) + " power");
                 }
                 
                 // Start intake at reduced power (0.5) to feed ball to feeder
@@ -908,22 +918,34 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
                     telemetry.addData("ERROR", "Failed to maintain shooter velocity: " + e.getMessage());
                 }
                 
-                // Keep feeding while R1 is held
+                // Keep feeding while shooter button is held
+                // Update feed power if button changes (R1 to R2 or vice versa)
+                if (r1CurrentlyPressed) {
+                    currentFeedMotorPower = 0.8;
+                } else if (r2CurrentlyPressed) {
+                    currentFeedMotorPower = 0.5;
+                }
+                
+                // Update feed motor power in case it changed
+                if (feedMotor != null) {
+                    feedMotor.setPower(currentFeedMotorPower);
+                }
+                
                 // Intake continues running at 0.5 power to push balls into chamber
-                if (!r1CurrentlyPressed) {
-                    // R1 released - stop everything and return to IDLE
+                if (!shooterButtonPressed) {
+                    // Shooter button released - stop everything and return to IDLE
                     stopFeeding();
                     stopShooter();
-                    stopAutoAlign("R1 released");
-                    telemetry.addData("DEBUG", "Shooter: R1 released - stopped all systems");
+                    stopAutoAlign("Shooter button released");
+                    telemetry.addData("DEBUG", "Shooter: Button released - stopped all systems");
                 }
                 // Note: Feed motor and intake continue running while in FEEDING state and R1 is held
                 // Auto-align continues to run concurrently to keep robot aligned
                 break;
         }
         
-        // Update R1 pressed state for next iteration
-        r1Pressed = r1CurrentlyPressed;
+        // Update R1 pressed state for next iteration (track if any shooter button was pressed)
+        r1Pressed = shooterButtonPressed;
     }
     
     /**

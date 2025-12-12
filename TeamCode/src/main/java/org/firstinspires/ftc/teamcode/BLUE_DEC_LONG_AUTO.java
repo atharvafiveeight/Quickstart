@@ -184,9 +184,9 @@ public class BLUE_DEC_LONG_AUTO extends OpMode {
         follower.setMaxPower(AUTONOMOUS_SPEED_MULTIPLIER);
         telemetry.addData("DEBUG", "MaxPower set to " + String.format("%.0f%%", AUTONOMOUS_SPEED_MULTIPLIER * 100));
         
-        // Set starting pose (mirrored from Red: 88.012, 8.251, 90°)
-        // Mirror: x -> 144-x, y -> 144-y, heading -> 180°-heading (or π-heading)
-        follower.setStartingPose(new Pose(55.988, 135.749, Math.toRadians(90)));
+        // Starting pose: Match first path start point (56.000, 8.558, 90°)
+        // This connects to shootPose1 which starts at (56.000, 8.558)
+        follower.setStartingPose(new Pose(56.000, 8.558, Math.toRadians(90)));
         
         pathTimer = new Timer();
         pathState = 0;
@@ -366,75 +366,67 @@ public class BLUE_DEC_LONG_AUTO extends OpMode {
     }
     
     // ========================================
-    // PATH BUILDING (MIRRORED FROM RED)
+    // PATH BUILDING (from PedroAutonomous)
     // ========================================
     private void buildPaths() {
         try {
-            // Mirror transformation: x -> 144-x, y -> 144-y, heading -> 180°-heading (or π-heading)
-            // Red starting: (88.012, 8.251, 90°) -> Blue starting: (55.988, 135.749, 90°)
+            // Paths from PedroAutonomous.java
+            // Starting pose: (72, 8, 90°)
             
             // First shot pose (preloaded balls)
-            // Red: (88.012, 8.251) -> (89.780, 13.752), 90° -> 69°
-            // Blue: (55.988, 135.749) -> (54.220, 130.248), 90° -> 111° (180-69)
+            // (56.000, 8.558) → (58.419, 16.186), heading 90° → 111°
             shootPose1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(55.988, 135.749), new Pose(54.220, 130.248)))
+                .addPath(new BezierLine(new Pose(56.000, 8.558), new Pose(58.419, 16.186)))
                 .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(111))
                 .build();
             
-            // Intake R3 ready position
-            // Red: (89.780, 13.752) -> (96.952, 35.255), 69° -> 0°
-            // Blue: (54.220, 130.248) -> (47.048, 108.745), 111° -> 180° (180-0)
+            // Intake B3 ready position
+            // (58.419, 16.186) → (43.721, 35.721), heading 111° → 180°
             intakeR3Ready = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(54.220, 130.248), new Pose(47.048, 108.745)))
+                .addPath(new BezierLine(new Pose(58.419, 16.186), new Pose(43.721, 35.721)))
                 .setLinearHeadingInterpolation(Math.toRadians(111), Math.toRadians(180))
                 .build();
             
-            // Intake R3 position
-            // Red: (96.952, 35.255) -> (132.33, 35.255), 0° -> 0°
-            // Blue: (47.048, 108.745) -> (11.67, 108.745), 180° -> 180°
+            // Intake B3 position
+            // (43.721, 35.721) → (8.558, 35.721), heading 180° → 180°
             intakeR3 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(47.048, 108.745), new Pose(11.67, 108.745)))
+                .addPath(new BezierLine(new Pose(43.721, 35.721), new Pose(8.558, 35.721)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
             
-            // Second shot pose (after R3 intake)
-            // Red: (132.33, 35.255) -> (89.780, 13.752), 0° -> 69°
-            // Blue: (11.67, 108.745) -> (54.220, 130.248), 180° -> 111°
+            // Second shot pose (after B3 intake)
+            // (8.558, 35.721) → (58.419, 16.186), heading 180° → 111°
             shootPose2 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(11.67, 108.745), new Pose(54.220, 130.248)))
+                .addPath(new BezierLine(new Pose(8.558, 35.721), new Pose(58.419, 16.186)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(111))
                 .build();
             
-            // Intake R2 ready position
-            // Red: (89.780, 13.752) -> (98.939, 59.462), 69° -> 0°
-            // Blue: (54.220, 130.248) -> (45.061, 84.538), 111° -> 180°
+            // Intake B2 ready position
+            // (58.419, 16.186) → (44.465, 58.977), heading 111° → 180°
             intakeR2Ready = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(54.220, 130.248), new Pose(45.061, 84.538)))
+                .addPath(new BezierLine(new Pose(58.419, 16.186), new Pose(44.465, 58.977)))
                 .setLinearHeadingInterpolation(Math.toRadians(111), Math.toRadians(180))
                 .build();
             
-            // Intake R2 position
-            // Red: (98.939, 59.462) -> (131.589, 58.345), 0° -> 0°
-            // Blue: (45.061, 84.538) -> (12.411, 85.655), 180° -> 180°
+            // Intake B2 position
+            // (44.465, 58.977) → (8.744, 59.349), heading 180° → 180°
             intakeR2 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(45.061, 84.538), new Pose(12.411, 85.655)))
+                .addPath(new BezierLine(new Pose(44.465, 58.977), new Pose(8.744, 59.349)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
             
-            // Third shot pose (after R2 intake)
-            // Red: (131.589, 58.345) -> (89.780, 13.752), 0° -> 69°
-            // Blue: (12.411, 85.655) -> (54.220, 130.248), 180° -> 111°
+            // Third shot pose (after B2 intake)
+            // (8.744, 59.349) → (58.419, 16.186), heading 180° → 111°
             shootPose3 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(12.411, 85.655), new Pose(54.220, 130.248)))
+                .addPath(new BezierLine(new Pose(8.744, 59.349), new Pose(58.419, 16.186)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(111))
                 .build();
             
-            // End pose (park)
-            // Red: (89.780, 13.752) -> (109.229, 8.644), 69° -> 0°
-            // Blue: (54.220, 130.248) -> (34.771, 135.356), 111° -> 180°
+            // End pose (park) - keep existing end pose logic or remove if not needed
+            // Using same end position as before for consistency
             endPose = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(54.220, 130.248), new Pose(34.771, 135.356)))
-                .setLinearHeadingInterpolation(Math.toRadians(111), Math.toRadians(180))
+                .addPath(new BezierLine(new Pose(58.419, 16.186), new Pose(58.419, 16.186)))
+                .setLinearHeadingInterpolation(Math.toRadians(111), Math.toRadians(111))
                 .build();
             
             telemetry.addData("DEBUG", "All paths built successfully");
@@ -1032,6 +1024,10 @@ public class BLUE_DEC_LONG_AUTO extends OpMode {
             // tx > 0: Target to the right → rotate right (positive rotation)
             double rawTx = result.getTx();
             
+            // Auto-correct adjustment: Subtract 3 degrees to compensate for shooting right
+            // This shifts the alignment target 3 degrees to the left
+            rawTx = rawTx - 3.0;
+            
             // Apply exponential smoothing to reduce noise and wobbling
             // Formula: smoothed = smoothing_factor * previous_smoothed + (1 - smoothing_factor) * new_value
             // Higher smoothing_factor = more smoothing (less responsive, less noisy)
@@ -1131,6 +1127,11 @@ public class BLUE_DEC_LONG_AUTO extends OpMode {
         
         // Initialize smoothed tx with first reading
         double tx = result.getTx();
+        
+        // Auto-correct adjustment: Subtract 3 degrees to compensate for shooting right
+        // This shifts the alignment target 3 degrees to the left
+        tx = tx - 3.0;
+        
         smoothedTx = tx;
         
         // Check if already aligned
