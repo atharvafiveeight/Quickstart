@@ -429,8 +429,8 @@ public class RED_DEC_SHORT_AUTO extends OpMode {
             shotPose3 = follower.pathBuilder()
                 .addPath(new BezierCurve(
                     new Pose(136.000, 57.860),
-                    new Pose(73.488, 56.744),
-                    new Pose(106.233, 59.349)
+                    new Pose(87.030, 43.809),
+                    new Pose(94.326, 96.744)
                 ))
                 .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(44))
                 .build();
