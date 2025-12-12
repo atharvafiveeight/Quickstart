@@ -1,8 +1,5 @@
-repositories {
-    mavenCentral()
-    google() // Needed for androidx
-    maven { url = "https://mymaven.bylazar.com/releases" }
-}
+// Repositories are now defined in settings.gradle (Gradle 8+ requirement)
+// Removed repositories block to avoid conflict with FAIL_ON_PROJECT_REPOS mode
 
 dependencies {
     implementation 'org.firstinspires.ftc:Inspection:11.0.0'
