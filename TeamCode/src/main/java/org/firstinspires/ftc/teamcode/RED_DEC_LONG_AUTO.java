@@ -94,7 +94,7 @@ public class RED_DEC_LONG_AUTO extends OpMode {
     private static final double SHORT_DISTANCE_INCHES = 36.0;
     private static final double LONG_DISTANCE_INCHES = 130.0;
     private static final double SHORT_DISTANCE_VELOCITY = 1000.0;
-    private static final double LONG_DISTANCE_VELOCITY = 1375.0;  // Reduced by 25 RPM from 1400.0
+    private static final double LONG_DISTANCE_VELOCITY = 1400.0;  // Reduced by 25 RPM from 1400.0
     private static final double MIN_VELOCITY = 800.0;
     private static final double MAX_VELOCITY = 1700.0;
     

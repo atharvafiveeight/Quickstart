@@ -112,7 +112,7 @@ public class RED_DEC_TELEOP extends LinearOpMode {
     private static final double SHORT_DISTANCE_INCHES = 36.0;   // Closest shooting distance (inches)
     private static final double LONG_DISTANCE_INCHES = 130.0;   // Farthest shooting distance (inches)
     private static final double SHORT_DISTANCE_VELOCITY = 1000.0;  // Shooter speed at close distance (RPM)
-    private static final double LONG_DISTANCE_VELOCITY = 1475.0;   // Shooter speed at far distance (RPM)
+    private static final double LONG_DISTANCE_VELOCITY = 1400.0;   // Shooter speed at far distance (RPM)
     private static final double MIN_VELOCITY = 800.0;   // Slowest allowed shooter speed (RPM)
     private static final double MAX_VELOCITY = 1700.0;  // Fastest allowed shooter speed (RPM)
     

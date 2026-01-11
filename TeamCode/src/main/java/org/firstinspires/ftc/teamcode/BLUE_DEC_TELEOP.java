@@ -137,7 +137,7 @@ public class BLUE_DEC_TELEOP extends LinearOpMode {
     private static final double POLY_COEFF_D = 0.0;  // Constant term
     
     // Shooter Control Constants
-    private static final double SHOOTER_TARGET_VELOCITY = 1475.0;  // Default speed when Limelight not working (RPM)
+    private static final double SHOOTER_TARGET_VELOCITY = 1400.0;  // Default speed when Limelight not working (RPM)
     private static final double SHOOTER_VELOCITY_THRESHOLD = 0.95; // Wait until 95% of target speed before feeding
     private static final double SHOOTER_PIDF_P = 100.0;  // Proportional gain (how fast to reach target speed)
     private static final double SHOOTER_PIDF_I = 0.0;    // Integral gain (not used)
