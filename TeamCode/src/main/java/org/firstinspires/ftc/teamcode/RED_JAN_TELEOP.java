@@ -16,6 +16,14 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.limelightvision.LLResult;
 
+// Drivetrain subsystem
+import org.firstinspires.ftc.teamcode.subsystem.MecanumDrive;
+import com.pedropathing.geometry.Pose;
+import com.pedropathing.math.Vector;
+import com.pedropathing.ftc.FTCCoordinates;
+import com.pedropathing.geometry.PedroCoordinates;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+
 import java.util.List;
 
 /**
@@ -55,9 +63,14 @@ import java.util.List;
 public class RED_JAN_TELEOP extends LinearOpMode {
 
     // ========================================
-    // DRIVETRAIN MOTORS
+    // DRIVETRAIN MOTORS (MANUAL CONTROL)
     // ========================================
-    private DcMotorEx frontLeft, frontRight, backLeft, backRight;
+    private DcMotorEx frontLeft, frontRight, backLeft, backRight;  // Direct motor control (like BLUE_DEC_TELEOP)
+    
+    // ========================================
+    // PEDROPATHING FOR HEADING AND POSE
+    // ========================================
+    private MecanumDrive drive;  // Only used for heading and pose tracking (not motor control)
     
     // ========================================
     // INTAKE AND FEEDING SYSTEM
@@ -79,7 +92,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     // ========================================
     // IMU FOR FIELD-CENTRIC CONTROL
     // ========================================
-    private GoBildaPinpointDriver odo;   // GoBilda PinPoint IMU ("odo") for heading and odometry
+    // Note: IMU/odometry is handled by PedroPathing Follower - do not access directly to avoid conflicts
     
     // ========================================
     // LIMELIGHT VISION SENSOR
@@ -98,7 +111,8 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     // Drive Control Constants
     private static final double JOYSTICK_DEADZONE = 0.10;  // Ignore small joystick movements to prevent drift
     private static final double MIN_MOTOR_POWER = 0.12;    // Minimum power needed to make motors move
-    private static final double DRIVE_POWER_MULTIPLIER = 0.9;  // Overall speed control (0.9 = 90% speed)
+    private static final double DRIVE_POWER_MULTIPLIER = 0.8;  // Overall speed control (0.8 = 80% speed)
+    private static final double STRAFE_POWER_MULTIPLIER = 1.3;  // Strafe speed multiplier (1.3 = 30% faster strafe than forward)
     
     // Intake Motor Constants
     private static final double INTAKE_FORWARD_POWER = 0.95;  // Power when L1 button pressed (forward)
@@ -111,28 +125,21 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     // Shooter Distance Constants
     private static final double SHORT_DISTANCE_INCHES = 36.0;   // Closest shooting distance (inches)
     private static final double LONG_DISTANCE_INCHES = 130.0;   // Farthest shooting distance (inches)
-    private static final double SHORT_DISTANCE_VELOCITY = 1000.0;  // Shooter speed at close distance (RPM)
-    private static final double LONG_DISTANCE_VELOCITY = 1400.0;   // Shooter speed at far distance (RPM)
+    private static final double SHORT_DISTANCE_VELOCITY = 1000.0;  // Shooter speed at close distance (RPM) - reduced by 50 RPM
+    private static final double LONG_DISTANCE_VELOCITY = 1400.0;   // Shooter speed at far distance (RPM) - reduced by 50 RPM
     private static final double MIN_VELOCITY = 800.0;   // Slowest allowed shooter speed (RPM)
     private static final double MAX_VELOCITY = 1700.0;  // Fastest allowed shooter speed (RPM)
     
     // Shooter Velocity Adjustments
     private static final double SHORT_DISTANCE_RPM_REDUCTION = 100.0;  // Reduce speed by this much for close shots (RPM)
     private static final double REDUCTION_TAPER_DISTANCE = 80.0;       // Distance where reduction stops (inches)
-    private static final double LONG_DISTANCE_RPM_INCREASE = 100.0;    // Add this much speed for far shots (RPM)
-    private static final double INCREASE_START_DISTANCE = 114.0;       // Distance where increase starts (inches)
     
-    // Shooter Velocity Curve (Polynomial)
-    // These numbers control how shooter speed changes between close and far distances
-    // Formula: speed = SHORT_VELOCITY + (LONG_VELOCITY - SHORT_VELOCITY) * curve
-    // Default values make a straight line (linear)
-    private static final double POLY_COEFF_A = 0.0;  // Cubic term (x^3)
-    private static final double POLY_COEFF_B = 0.0;  // Quadratic term (x^2)
-    private static final double POLY_COEFF_C = 1.0;  // Linear term (x)
-    private static final double POLY_COEFF_D = 0.0;  // Constant term
+    // Optional: Single distance calibration multiplier if base distance calculation needs adjustment
+    // Set to 1.0 to use raw Limelight distance, or tune if distance readings are consistently off
+    private static final double DISTANCE_CALIBRATION_MULTIPLIER = 1.0;  // Tune this if distance needs adjustment
     
     // Shooter Control Constants
-    private static final double SHOOTER_TARGET_VELOCITY = 1475.0;  // Default speed when Limelight not working (RPM)
+    private static final double SHOOTER_TARGET_VELOCITY = 1000.0;  // Default speed when Limelight not working (RPM)
     private static final double SHOOTER_VELOCITY_THRESHOLD = 0.95; // Wait until 95% of target speed before feeding
     private static final double SHOOTER_PIDF_P = 100.0;  // Proportional gain (how fast to reach target speed)
     private static final double SHOOTER_PIDF_I = 0.0;    // Integral gain (not used)
@@ -176,6 +183,17 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     private double autoAlignRotationCommand = 0.0;  // How much to rotate (from auto-align)
     private ElapsedTime autoAlignTimer = new ElapsedTime();  // Timer to stop auto-align after timeout
     
+    // ========================================
+    // FIELD-CENTRIC DEBUG VARIABLES
+    // ========================================
+    private double fcRawHeading = 0.0;
+    private double fcHeadingUsed = 0.0;
+    private double fcYBefore = 0.0;
+    private double fcXBefore = 0.0;
+    private double fcYAfter = 0.0;
+    private double fcXAfter = 0.0;
+    private String fcStatus = "NOT RUN";
+    
     @Override
     public void runOpMode() throws InterruptedException {
         
@@ -189,14 +207,15 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         }
 
         // ========================================
-        // STEP 2: INITIALIZE DRIVETRAIN MOTORS
+        // STEP 2: INITIALIZE DRIVETRAIN MOTORS (MANUAL CONTROL)
         // ========================================
+        // Initialize drive motors directly (matching BLUE_DEC_TELEOP)
         boolean driveMotorsInitialized = true;
         
         try {
             frontLeft = hardwareMap.get(DcMotorEx.class, "frontLeft");
             if (frontLeft == null) {
-                telemetry.addData("ERROR", "Front left motor 'frontLeft' not found in hardware map!");
+                telemetry.addData("ERROR", "Front left motor 'frontLeft' not found!");
                 driveMotorsInitialized = false;
             }
         } catch (Exception e) {
@@ -207,7 +226,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         try {
             frontRight = hardwareMap.get(DcMotorEx.class, "frontRight");
             if (frontRight == null) {
-                telemetry.addData("ERROR", "Front right motor 'frontRight' not found in hardware map!");
+                telemetry.addData("ERROR", "Front right motor 'frontRight' not found!");
                 driveMotorsInitialized = false;
             }
         } catch (Exception e) {
@@ -218,7 +237,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         try {
             backLeft = hardwareMap.get(DcMotorEx.class, "backLeft");
             if (backLeft == null) {
-                telemetry.addData("ERROR", "Back left motor 'backLeft' not found in hardware map!");
+                telemetry.addData("ERROR", "Back left motor 'backLeft' not found!");
                 driveMotorsInitialized = false;
             }
         } catch (Exception e) {
@@ -229,7 +248,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         try {
             backRight = hardwareMap.get(DcMotorEx.class, "backRight");
             if (backRight == null) {
-                telemetry.addData("ERROR", "Back right motor 'backRight' not found in hardware map!");
+                telemetry.addData("ERROR", "Back right motor 'backRight' not found!");
                 driveMotorsInitialized = false;
             }
         } catch (Exception e) {
@@ -241,18 +260,29 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             telemetry.addData("CRITICAL ERROR", "Drive motors failed to initialize - robot cannot move!");
         }
         
-        // Set motor directions - same as RED_NOVTELEOP
+        // Set motor directions (matching BLUE_DEC_TELEOP)
         if (frontRight != null) frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
         if (backRight != null) backRight.setDirection(DcMotorSimple.Direction.FORWARD);
         if (frontLeft != null) frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
         if (backLeft != null) backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
         
-        // Set motors to FLOAT (coast) when no power is applied - allows robot to coast with inertia
-        // Changed from BRAKE to prevent robot from lifting when stopping
-        if (frontLeft != null) frontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-        if (frontRight != null) frontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-        if (backLeft != null) backLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-        if (backRight != null) backRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        // Set motors to brake when no power is applied
+        if (frontLeft != null) frontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        if (frontRight != null) frontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        if (backLeft != null) backLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        if (backRight != null) backRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        
+        // ========================================
+        // STEP 2.5: INITIALIZE PEDROPATHING FOR HEADING/POSE ONLY
+        // ========================================
+        // Initialize PedroPathing Follower ONLY for heading and pose tracking (not motor control)
+        try {
+            drive = new MecanumDrive(hardwareMap, null);
+            // Don't start teleop drive mode - we're controlling motors manually
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to initialize PedroPathing (heading/pose only): " + e.getMessage());
+            drive = null;
+        }
         
         // ========================================
         // STEP 3: INITIALIZE INTAKE MOTOR
@@ -271,10 +301,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 intakeMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
                 intakeMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT); // Changed to FLOAT for smoother operation
                 intakeMotor.setPower(0.0); // Stop initially
-                telemetry.addData("DEBUG", "Intake motor initialized successfully");
-                telemetry.addData("DEBUG", "Intake motor name: intakeMotor");
-                telemetry.addData("DEBUG", "Intake motor direction: REVERSE");
-                telemetry.addData("DEBUG", "Intake motor mode: RUN_WITHOUT_ENCODER");
             }
         } catch (Exception e) {
             telemetry.addData("ERROR", "Failed to initialize intake motor: " + e.getMessage());
@@ -298,8 +324,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 feedMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
                 feedMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
                 feedMotor.setPower(0.0); // Stop initially
-                telemetry.addData("DEBUG", "Feed motor initialized successfully");
-                telemetry.addData("DEBUG", "Feed motor direction: REVERSE");
             }
         } catch (Exception e) {
             telemetry.addData("ERROR", "Failed to initialize feed motor: " + e.getMessage());
@@ -362,8 +386,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 
                 shooterMotorLeft.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoeffs);
                 shooterMotorRight.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoeffs);
-                
-                telemetry.addData("DEBUG", "Shooter motors initialized with velocity control");
             } catch (Exception e) {
                 telemetry.addData("ERROR", "Failed to configure shooter motors: " + e.getMessage());
                 shooterInitialized = false;
@@ -371,76 +393,12 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         }
         
         // ========================================
-        // STEP 6: INITIALIZE IMU FOR FIELD-CENTRIC CONTROL
+        // STEP 6: IMU/ODOMETRY HANDLED BY PEDROPATHING
         // ========================================
-        // Initialize IMU to know which direction robot is facing
-        // Configuration matches Constants.java for consistency
-        boolean imuInitialized = true;
-        try {
-            odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
-            if (odo == null) {
-                telemetry.addData("ERROR", "PinPoint IMU 'odo' not found in hardware map!");
-                imuInitialized = false;
-            } else {
-                // Configure odometry pods similar to Constants.java
-                // Note: These values match Constants.localizerConstants configuration
-                try {
-                    // Set odometry pod offsets (matching Constants.java values)
-                // forwardPodY = -3.6A22 inches, strafePodX = -3.976 inches
-                    odo.setOffsets(-3.976, -3.622, DistanceUnit.INCH);
-                    
-                    // Set encoder resolution for 4-bar pod
-                    odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-                    
-                    // Set encoder directions (matching Constants.java)
-                    // Forward encoder: REVERSED, Strafe encoder: FORWARD
-                    odo.setEncoderDirections(
-                        GoBildaPinpointDriver.EncoderDirection.REVERSED,  // Forward encoder
-                        GoBildaPinpointDriver.EncoderDirection.FORWARD      // Strafe encoder
-                    );
-                    
-                    telemetry.addData("DEBUG", "PinPoint odometry pods configured");
-                } catch (Exception e) {
-                    telemetry.addData("WARNING", "Odometry pod configuration failed (may not have pods): " + e.getMessage());
-                    telemetry.addData("WARNING", "Continuing with IMU-only mode (heading only)");
-                }
-                
-                // Reset IMU to 0 degrees (robot must be stationary)
-                odo.resetPosAndIMU();
-                
-                // Wait for IMU to be ready
-                telemetry.addData("Status", "Initializing PinPoint IMU (RED side - resetting to 0°)...");
-                telemetry.addData("IMU Reset", "Robot should be facing away from driver (toward field)");
-                telemetry.update();
-                
-                // Wait for IMU to be ready (check device status)
-                while (odo.getDeviceStatus() != GoBildaPinpointDriver.DeviceStatus.READY && opModeIsActive()) {
-                    telemetry.addData("IMU Status", odo.getDeviceStatus().toString());
-                    telemetry.addData("Waiting", "Please wait for IMU to be ready...");
-                    telemetry.update();
-                    sleep(50);
-                }
-                
-                // Verify heading is reset to 0° (or close to it)
-                try {
-                    double initialHeading = odo.getHeading(AngleUnit.DEGREES);
-                    telemetry.addData("DEBUG", "PinPoint IMU initialized successfully");
-                    telemetry.addData("IMU Status", odo.getDeviceStatus().toString());
-                    telemetry.addData("Initial Heading", String.format("%.1f°", initialHeading) + " (should be ~0° for RED side)");
-                } catch (Exception e) {
-                    telemetry.addData("DEBUG", "PinPoint IMU initialized (heading read failed: " + e.getMessage() + ")");
-                    telemetry.addData("IMU Status", odo.getDeviceStatus().toString());
-                }
-            }
-        } catch (Exception e) {
-            telemetry.addData("ERROR", "PinPoint IMU initialization failed: " + e.getMessage());
-            imuInitialized = false;
-            odo = null;
-        }
-        
-        if (!imuInitialized) {
-            telemetry.addData("WARNING", "PinPoint IMU not available - field-centric control disabled");
-        }
+        // Note: PedroPathing Follower handles all IMU/odometry access via Constants.java
+        // Do NOT access "odo" directly to avoid "multiple drivers" conflict
+        // The Follower initializes and manages the PinpointDriver internally
+        telemetry.addData("Status", "IMU/Odometry managed by PedroPathing Follower");
         
         // ========================================
         // STEP 6.5: INITIALIZE LIMELIGHT VISION SENSOR
@@ -458,8 +416,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 
                 // Start Limelight
                 limelight.start();
-                
-                telemetry.addData("DEBUG", "Limelight initialized successfully");
             }
         } catch (Exception e) {
             telemetry.addData("ERROR", "Limelight initialization failed: " + e.getMessage());
@@ -484,7 +440,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             } else {
                 // Default to RED on init until we have a Limelight reading
                 rgb.setPosition(RGB_RED);
-                telemetry.addData("DEBUG", "RGB LED initialized successfully");
             }
         } catch (Exception e) {
             telemetry.addData("ERROR", "RGB LED initialization failed: " + e.getMessage());
@@ -500,8 +455,9 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         // STEP 7: READY TO START
         // ========================================
         telemetry.addData("Status", "RED_JAN_TELEOP Ready!");
-        telemetry.addData("Localization", "IMU Field-Centric (no odometry)");
-        telemetry.addData("Control Mode", "Field-Oriented Control");
+        telemetry.addData("Localization", "PedroPathing Follower (Pinpoint Odometry)");
+        telemetry.addData("Control Mode", "Field-Oriented Control (via Follower)");
+        telemetry.addData("Drivetrain", drive != null ? "Initialized" : "FAILED");
         telemetry.addData("Instructions", "Use left stick to move, right stick X to rotate");
         telemetry.addData("Intake", "L1 forward, L2 reverse");
         telemetry.addData("Shooter", "R1 to shoot");
@@ -519,20 +475,41 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 hub.clearBulkCache();
             }
             
-            // Update IMU to get current robot heading
-            // Using full update() to get both heading and odometry position (if pods are configured)
-            if (odo != null) {
+            // Update PedroPathing for heading and pose tracking only (not motor control)
+            if (drive != null) {
                 try {
-                    // Update full odometry (heading + position if pods available)
-                    // If pods not available, this still updates heading
-                    odo.update();
+                    drive.periodic();  // Update follower pose (odometry tracking)
                 } catch (Exception e) {
-                    telemetry.addData("ERROR", "Failed to update PinPoint IMU: " + e.getMessage());
+                    telemetry.addData("ERROR", "Failed to update PedroPathing: " + e.getMessage());
                 }
             }
             
-            // Update Limelight data for distance-based velocity calculation
-            // Limelight updates automatically, but we need to read results in the shooter control
+            // ========================================
+            // STEP 8.5: LIMELIGHT POSE CORRECTION
+            // ========================================
+            // Use Limelight AprilTag data to correct PedroPathing's pose
+            if (limelight != null && drive != null) {
+                LLResult result = limelight.getLatestResult();
+                if (result != null) {
+                    // Check if result is valid and has AprilTag detections
+                    boolean hasValidTargets = result.isValid() && 
+                        result.getFiducialResults() != null && 
+                        !result.getFiducialResults().isEmpty();
+                    
+                    if (hasValidTargets) {
+                        // Use AprilTag data to correct PedroPathing's pose
+                        Pose correctedPose = getRobotPoseFromCamera(result);
+                        if (correctedPose != null) {
+                            try {
+                                // Access PedroPathing follower directly to set pose
+                                drive.follower.setPose(correctedPose);
+                            } catch (Exception e) {
+                                telemetry.addData("ERROR", "Failed to apply pose correction: " + e.getMessage());
+                            }
+                        }
+                    }
+                }
+            }
             
             // ========================================
             // STEP 9: HANDLE IMU RESET (D-PAD DOWN)
@@ -542,12 +519,13 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             boolean dpadDownCurrentlyPressed = gamepad1.dpad_down;
             boolean dpadDownJustPressed = dpadDownCurrentlyPressed && !prevDpadDown;
             
-            if (dpadDownJustPressed && odo != null) {
+            if (dpadDownJustPressed && drive != null) {
                 try {
-                    odo.resetPosAndIMU(); // Reset IMU to 0 degrees
-                    telemetry.addData("IMU RESET", "IMU reset to 0° (D-pad down pressed)");
+                    // Reset heading to 0° using PedroPathing Follower (avoids multiple drivers conflict)
+                    drive.resetHeading(0.0);
+                    telemetry.addData("IMU RESET", "Heading reset to 0° via PedroPathing (D-pad down pressed)");
                 } catch (Exception e) {
-                    telemetry.addData("ERROR", "Failed to reset IMU: " + e.getMessage());
+                    telemetry.addData("ERROR", "Failed to reset heading: " + e.getMessage());
                 }
             }
             prevDpadDown = dpadDownCurrentlyPressed;
@@ -571,10 +549,10 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             // ========================================
             // STEP 13: GET JOYSTICK INPUT
             // ========================================
-            // Read joystick values and apply deadzone to prevent drift
-            double y = applyAdvancedDeadzone(-gamepad1.left_stick_y); // Forward/backward
-            double x = applyAdvancedDeadzone(gamepad1.left_stick_x);  // Strafing
-            double rx = applyAdvancedDeadzone(gamepad1.right_stick_x); // Rotation
+            // Read joystick values and apply deadzone (EXACT match to BLUE_DEC_TELEOP lines 580-582)
+            double y = applyAdvancedDeadzone(-gamepad1.left_stick_y); // Forward/backward (negated - matches BLUE_DEC)
+            double x = applyAdvancedDeadzone(gamepad1.left_stick_x);  // Strafing (NOT negated - matches BLUE_DEC)
+            double rx = applyAdvancedDeadzone(gamepad1.right_stick_x); // Rotation (NOT negated - matches BLUE_DEC)
             
             // Override rotation with auto-align command if active
             if (autoAlignMode) {
@@ -587,26 +565,29 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             rx = Math.copySign(rx * rx, rx);
 
             // ========================================
-            // STEP 14: DRIVE CONTROL
+            // STEP 14: MANUAL DRIVE CONTROL (MATCHING BLUE_DEC_TELEOP)
             // ========================================
-            // Drive robot using field-centric control (IMU-based)
+            // Use manual motor control matching BLUE_DEC_TELEOP exactly
+            // Field-centric rotation is handled INSIDE manualDriveControl (not here)
             manualDriveControl(x, y, rx);
             
             // Get current heading for telemetry
             double botHeading = 0.0;
-            if (odo != null) {
+            if (drive != null) {
                 try {
-                    botHeading = odo.getHeading(AngleUnit.RADIANS);
+                    // Get heading from PedroPathing's pose (more accurate than IMU alone)
+                    botHeading = drive.getPose().getHeading();
                 } catch (Exception e) {
-                    telemetry.addData("ERROR", "Failed to read PinPoint IMU heading: " + e.getMessage());
+                    telemetry.addData("ERROR", "Failed to get heading from PedroPathing: " + e.getMessage());
                 }
             }
             
-            // Get motor powers for telemetry
+            // Get motor powers for telemetry (from actual motors)
             double flPower = (frontLeft != null) ? frontLeft.getPower() : 0.0;
             double frPower = (frontRight != null) ? frontRight.getPower() : 0.0;
             double blPower = (backLeft != null) ? backLeft.getPower() : 0.0;
             double brPower = (backRight != null) ? backRight.getPower() : 0.0;
+            
             updateTelemetry(flPower, frPower, blPower, brPower, botHeading);
         }
         
@@ -625,7 +606,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
      */
     private void handleIntakeControls() {
         if (intakeMotor == null) {
-            telemetry.addData("DEBUG", "Intake motor is NULL - cannot control");
             return;
         }
         
@@ -676,15 +656,12 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             
             // Get current Limelight data
             if (limelight == null) {
-                telemetry.addData("AUTO-ALIGN", "ERROR: Limelight not available");
                 stopAutoAlign("Limelight not available");
                 return;
             }
             
             LLResult result = limelight.getLatestResult();
             if (result == null || !result.isValid()) {
-                telemetry.addData("AUTO-ALIGN", "WARNING: No valid AprilTag detected - cannot align");
-                telemetry.addData("AUTO-ALIGN", "Make sure AprilTag is in view of Limelight camera");
                 // Don't stop auto-align, just wait for tag to appear
                 autoAlignRotationCommand = 0.0;
                 return;
@@ -699,7 +676,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             if (Math.abs(tx) <= AUTO_ALIGN_TX_TOLERANCE) {
                 // Aligned! Stop rotation but keep mode active
                 autoAlignRotationCommand = 0.0;
-                telemetry.addData("AUTO-ALIGN", "ALIGNED! (tx=" + String.format("%.2f", tx) + "°)");
                 return;
             }
             
@@ -720,9 +696,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             
             // Store rotation command for use in drive control
             autoAlignRotationCommand = rotationCommand;
-            
-            telemetry.addData("AUTO-ALIGN", "Aligning... (tx=" + String.format("%.2f", tx) + 
-                "°, rot=" + String.format("%.2f", rotationCommand) + ")");
         }
     }
     
@@ -739,15 +712,12 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         // Get current Limelight result
         LLResult result = limelight.getLatestResult();
         if (result == null || !result.isValid()) {
-            telemetry.addData("AUTO-ALIGN", "ERROR: No valid Limelight data - cannot see AprilTag");
-            telemetry.addData("AUTO-ALIGN", "Make sure Limelight can see the AprilTag");
             return;
         }
         
         // Check if already aligned
         double tx = result.getTx();
         if (Math.abs(tx) <= AUTO_ALIGN_TX_TOLERANCE) {
-            telemetry.addData("AUTO-ALIGN", "Already aligned! (tx=" + String.format("%.2f", tx) + "°)");
             autoAlignMode = true;
             autoAlignRotationCommand = 0.0;
             autoAlignTimer.reset();
@@ -757,11 +727,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         // Initialize auto-align mode
         autoAlignMode = true;
         autoAlignTimer.reset();
-        
-        telemetry.addData("AUTO-ALIGN", "Mode started - aligning robot to center AprilTag");
-        telemetry.addData("AUTO-ALIGN", "Current tx=" + String.format("%.2f", tx) + 
-            "° (target: 0.0°, tolerance: ±" + String.format("%.1f", AUTO_ALIGN_TX_TOLERANCE) + "°)");
-        telemetry.addData("AUTO-ALIGN", "tx<0 means target left, tx>0 means target right");
     }
     
     /**
@@ -770,7 +735,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     private void stopAutoAlign(String reason) {
         autoAlignMode = false;
         autoAlignRotationCommand = 0.0;
-        telemetry.addData("AUTO-ALIGN", "Mode stopped - " + reason);
     }
     
     /**
@@ -808,7 +772,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                     try {
                         shooterMotorLeft.setVelocity(targetVelocity);
                         shooterMotorRight.setVelocity(targetVelocity);
-                        telemetry.addData("DEBUG", "Shooter: Starting spin-up to " + String.format("%.0f", targetVelocity) + " RPM (distance-based)");
                     } catch (Exception e) {
                         telemetry.addData("ERROR", "Failed to start shooter motors: " + e.getMessage());
                         shooterState = ShooterState.IDLE;
@@ -835,18 +798,8 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                     double rightVel = Math.abs(shooterMotorRight.getVelocity());
                     double effectiveTarget = currentTargetVelocity * SHOOTER_VELOCITY_THRESHOLD;
                     
-                    // Debug: Show target vs actual
-                    telemetry.addData("DEBUG", "Shooter: Target=" + String.format("%.0f", currentTargetVelocity) + 
-                        " RPM, L=" + String.format("%.1f", leftVel) + " R=" + String.format("%.1f", rightVel) + 
-                        " RPM (need " + String.format("%.1f", effectiveTarget) + ")");
-                    
                     if (leftVel >= effectiveTarget && rightVel >= effectiveTarget) {
                         shooterState = ShooterState.READY;
-                        telemetry.addData("DEBUG", "Shooter: Velocity reached (L:" + String.format("%.1f", leftVel) + 
-                            " R:" + String.format("%.1f", rightVel) + " RPM)");
-                    } else {
-                        telemetry.addData("DEBUG", "Shooter: Spinning up... (L:" + String.format("%.1f", leftVel) + 
-                            " R:" + String.format("%.1f", rightVel) + " / " + String.format("%.1f", effectiveTarget) + " RPM)");
                     }
                 } catch (Exception e) {
                     telemetry.addData("ERROR", "Failed to read shooter velocity: " + e.getMessage());
@@ -876,19 +829,15 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 shooterState = ShooterState.FEEDING;
                 
                 // Start feed motor with power based on which button is pressed
-                if (feedMotor != null) {
-                    feedMotor.setPower(currentFeedMotorPower);
-                    telemetry.addData("DEBUG", "Shooter: Feed motor started at " + String.format("%.1f", currentFeedMotorPower) + " power");
-                }
-                
+                        if (feedMotor != null) {
+                            feedMotor.setPower(currentFeedMotorPower);
+                        }
+                        
                 // Start intake at reduced power (0.5) to feed ball to feeder
                 // This pushes the ball into the chamber when first feed is triggered
-                if (intakeMotor != null) {
-                    intakeMotor.setPower(INTAKE_SHOOTER_POWER);
-                    telemetry.addData("DEBUG", "Shooter: Intake started at " + INTAKE_SHOOTER_POWER + " power (pushing ball into chamber)");
+                        if (intakeMotor != null) {
+                            intakeMotor.setPower(INTAKE_SHOOTER_POWER);
                 }
-                
-                telemetry.addData("DEBUG", "Shooter: Feeding ball to shooter");
                 break;
                 
             case FEEDING:
@@ -923,7 +872,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                     stopFeeding();
                     stopShooter();
                     stopAutoAlign("Shooter button released");
-                    telemetry.addData("DEBUG", "Shooter: Button released - stopped all systems");
                 }
                 // Note: Feed motor and intake continue running while in FEEDING state and R1 is held
                 // Auto-align continues to run concurrently to keep robot aligned
@@ -953,7 +901,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             }
         }
         shooterState = ShooterState.IDLE;
-        telemetry.addData("DEBUG", "Shooter: Stopped");
     }
     
     /**
@@ -966,43 +913,41 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         }
         // Note: Intake is controlled by handleIntakeControls() which runs every loop
         // It will stop the intake when shooterState is no longer FEEDING
-        telemetry.addData("DEBUG", "Shooter: Feeding stopped");
     }
     
     /**
      * Calculate dynamic shooter velocity based on actual distance to AprilTag
-     * Uses calculated distance from Limelight ta with polynomial aggression curve
-     * Calibration: Short distance (36") = 1000 RPM, Long distance (114") = 1400 RPM
+     * Simplified linear model: Uses Limelight ta to calculate distance, then linear interpolation
      * 
-     * Polynomial Formula:
-     * - Normalizes distance to 0.0 (short) to 1.0 (long)
-     * - Applies polynomial curve: curve = a*x^3 + b*x^2 + c*x + d
-     * - Maps curve result to velocity range
+     * Velocity Range:
+     * - Short distance (36"): 1050 RPM - 100 RPM reduction = 950 RPM (for accuracy)
+     * - Long distance (130"): 1450 RPM (linear interpolation)
      * 
-     * Tuning Guide:
-     * - POLY_COEFF_A (cubic): Controls high-distance aggression
-     *   * Positive: Aggressive velocity increase at long distances
-     *   * Negative: Gentler velocity increase at long distances
-     * - POLY_COEFF_B (quadratic): Controls mid-distance curve shape
-     *   * Positive: Faster mid-range acceleration
-     *   * Negative: Slower mid-range acceleration
-     * - POLY_COEFF_C (linear): Controls overall slope (1.0 = linear)
-     * - POLY_COEFF_D (constant): Baseline offset (usually 0.0)
+     * How it works:
+     * 1. Calculate base distance from Limelight ta (target area)
+     * 2. Apply optional calibration multiplier if distance needs adjustment
+     * 3. Clamp distance to working range [36", 130"]
+     * 4. Linear interpolation: velocity = 1000 + (1400-1000) × normalizedDistance
+     * 5. Apply close-range reduction (< 80") for better accuracy at short distances
+     * 6. Clamp to safe limits [800, 1700] RPM
      * 
-     * Example aggressive curve: A=0.5, B=-0.3, C=0.8, D=0.0
-     * Example gentle curve: A=-0.2, B=0.1, C=1.1, D=0.0
+     * Tuning:
+     * - DISTANCE_CALIBRATION_MULTIPLIER: Adjust if Limelight distance readings are consistently off
+     * - SHORT_DISTANCE_VELOCITY: Base velocity at close range (36")
+     * - LONG_DISTANCE_VELOCITY: Base velocity at far range (130")
+     * - SHORT_DISTANCE_RPM_REDUCTION: How much to reduce for close shots (helps accuracy)
+     * - REDUCTION_TAPER_DISTANCE: Distance where reduction stops (80")
      * 
      * @return Calculated target velocity in RPM
      */
     private double calculateDynamicVelocity() {
+        // Fallback to default velocity if Limelight not available
         if (limelight == null) {
-            // Fallback to default velocity if Limelight not available
             return SHOOTER_TARGET_VELOCITY;
         }
         
         LLResult result = limelight.getLatestResult();
         if (result == null || !result.isValid()) {
-            // Fallback to default velocity if no valid Limelight data
             return SHOOTER_TARGET_VELOCITY;
         }
         
@@ -1012,66 +957,41 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             return SHOOTER_TARGET_VELOCITY;
         }
         
-        // Calculate base distance from target area
+        // Step 1: Calculate base distance from target area
+        // Formula: distance ∝ 1/√(ta) - inverse square root relationship
         double distanceCalibrationFactor = 50.0;
         double baseDistance = distanceCalibrationFactor / Math.sqrt(Math.max(ta, 0.1));
         
-        // Adjust distance based on how far away the target is
-        double appliedMultiplier = 1.0;
-        if (baseDistance < 40.0) {
-            appliedMultiplier = 1.424;
-        } else if (baseDistance < 90.0) {
-            double slope = -0.00212;
-            appliedMultiplier = 1.42 + (baseDistance - 40.0) * slope;
-        } else {
-            double slope = -0.0030;
-            appliedMultiplier = 1.333 + (baseDistance - 81.0) * slope;
-            appliedMultiplier = Math.max(0.95, appliedMultiplier);
-        }
+        // Step 2: Apply optional calibration multiplier (set to 1.0 if not needed)
+        double actualDistance = baseDistance * DISTANCE_CALIBRATION_MULTIPLIER;
         
-        double actualDistance = baseDistance * appliedMultiplier;
+        // Step 2.5: Add 20" offset to correct for consistent measurement error
+        actualDistance += 20.0;
         
-        // Keep distance within our working range
+        // Step 3: Clamp distance to working range
         actualDistance = Math.max(SHORT_DISTANCE_INCHES, Math.min(LONG_DISTANCE_INCHES, actualDistance));
         
-        // Convert distance to a number between 0.0 (close) and 1.0 (far)
+        // Step 4: Normalize distance to 0.0 (close) to 1.0 (far) for linear interpolation
         double normalizedDistance = (actualDistance - SHORT_DISTANCE_INCHES) / 
             (LONG_DISTANCE_INCHES - SHORT_DISTANCE_INCHES);
         
-        // Calculate curve value using polynomial formula
-        double polynomialCurve = POLY_COEFF_A * normalizedDistance * normalizedDistance * normalizedDistance +
-                                 POLY_COEFF_B * normalizedDistance * normalizedDistance +
-                                 POLY_COEFF_C * normalizedDistance +
-                                 POLY_COEFF_D;
-        
-        // Keep curve between 0.0 and 1.0
-        polynomialCurve = Math.max(0.0, Math.min(1.0, polynomialCurve));
-        
-        // Calculate base velocity: 0.0 = slow speed, 1.0 = fast speed
+        // Step 5: Linear interpolation between short and long distance velocities
+        // At 36": normalizedDistance = 0.0 → velocity = 1050 RPM (after reduction: ~950 RPM)
+        // At 130": normalizedDistance = 1.0 → velocity = 1450 RPM
         double calculatedVelocity = SHORT_DISTANCE_VELOCITY + 
-            (LONG_DISTANCE_VELOCITY - SHORT_DISTANCE_VELOCITY) * polynomialCurve;
+            (LONG_DISTANCE_VELOCITY - SHORT_DISTANCE_VELOCITY) * normalizedDistance;
         
-        // Reduce speed for close shots (helps accuracy)
+        // Step 6: Apply close-range reduction for better accuracy at short distances
+        // Tapered reduction: 100 RPM at 36", 0 RPM at 80"
         if (actualDistance < REDUCTION_TAPER_DISTANCE) {
-            // Calculate how much to reduce (more reduction when closer)
             double reductionFactor = 1.0 - ((actualDistance - SHORT_DISTANCE_INCHES) / 
                 (REDUCTION_TAPER_DISTANCE - SHORT_DISTANCE_INCHES));
             reductionFactor = Math.max(0.0, Math.min(1.0, reductionFactor));
-            
-            // Apply the reduction
-            double velocityReduction = SHORT_DISTANCE_RPM_REDUCTION * reductionFactor;
-            calculatedVelocity -= velocityReduction;
+            calculatedVelocity -= SHORT_DISTANCE_RPM_REDUCTION * reductionFactor;
         }
         
-        // Increase speed for far shots (helps reach target)
-        if (actualDistance >= INCREASE_START_DISTANCE) {
-            calculatedVelocity += LONG_DISTANCE_RPM_INCREASE;
-        }
-        
-        // Keep velocity within safe limits
-        calculatedVelocity = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, calculatedVelocity));
-        
-        return calculatedVelocity;
+        // Step 7: Clamp to safe velocity limits
+        return Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, calculatedVelocity));
     }
     
     /**
@@ -1082,88 +1002,15 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         if (feedMotor != null) feedMotor.setPower(0.0);
         stopShooter();
         
+        // Stop drivetrain motors directly
         if (frontLeft != null) frontLeft.setPower(0.0);
         if (frontRight != null) frontRight.setPower(0.0);
         if (backLeft != null) backLeft.setPower(0.0);
         if (backRight != null) backRight.setPower(0.0);
     }
     
-    /**
-     * Handle manual drive control with field-oriented control
-     * Uses PinPoint IMU directly for field-centric heading
-     * Field-centric: Forward always moves toward field, regardless of robot orientation
-     * For RED side: 0° = facing away from driver (toward field)
-     */
-    private void manualDriveControl(double x, double y, double rx) {
-        // Get the robot's current heading from PinPoint IMU
-        // For RED side: 0° = facing away from driver (toward field)
-        double botHeading = 0.0;
-        boolean imuAvailable = false;
-        if (odo != null) {
-            try {
-                botHeading = odo.getHeading(AngleUnit.RADIANS);
-                imuAvailable = true;
-            } catch (Exception e) {
-                // If IMU read fails, use 0 heading (robot-centric mode)
-                telemetry.addData("ERROR", "PinPoint IMU read failed, using robot-centric: " + e.getMessage());
-                botHeading = 0.0;
-                imuAvailable = false;
-            }
-        } else {
-            telemetry.addData("ERROR", "PinPoint IMU is NULL - using robot-centric mode");
-            botHeading = 0.0;
-            imuAvailable = false;
-        }
-
-        // Convert joystick input to field coordinates (field-centric control)
-        // This makes forward always move toward the field, not the robot's current direction
-        if (imuAvailable && odo != null) {
-            // Rotate joystick input based on robot's heading
-            double temp = y * Math.cos(botHeading) - x * Math.sin(botHeading);
-            x = y * Math.sin(botHeading) + x * Math.cos(botHeading);
-            y = temp;
-            
-            telemetry.addData("Field-Centric", "ACTIVE (Heading: " + String.format("%.1f°", Math.toDegrees(botHeading)) + ")");
-        } else {
-            // Robot-centric mode (fallback if IMU not working)
-            if (odo == null) {
-                telemetry.addData("Field-Centric", "DISABLED - IMU is NULL");
-            } else if (!imuAvailable) {
-                telemetry.addData("Field-Centric", "DISABLED - IMU read failed");
-            }
-        }
-
-        // Mecanum wheel calculations
-        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1);
-        double flPower = (y + x + rx) / denominator;
-        double blPower = (y - x + rx) / denominator;
-        double frPower = (y - x - rx) / denominator;
-        double brPower = (y + x - rx) / denominator;
-
-        // Apply minimum power threshold
-        flPower = applyMinPower(flPower);
-        blPower = applyMinPower(blPower);
-        frPower = applyMinPower(frPower);
-        brPower = applyMinPower(brPower);
-
-        // Apply power multiplier
-        flPower *= DRIVE_POWER_MULTIPLIER;
-        blPower *= DRIVE_POWER_MULTIPLIER;
-        frPower *= DRIVE_POWER_MULTIPLIER;
-        brPower *= DRIVE_POWER_MULTIPLIER;
-        
-        // Clamp power to maximum of 1.0
-        flPower = Math.max(-1.0, Math.min(1.0, flPower));
-        blPower = Math.max(-1.0, Math.min(1.0, blPower));
-        frPower = Math.max(-1.0, Math.min(1.0, frPower));
-        brPower = Math.max(-1.0, Math.min(1.0, brPower));
-
-        // Apply motor powers
-        if (frontLeft != null) frontLeft.setPower(flPower);
-        if (backLeft != null) backLeft.setPower(blPower);
-        if (frontRight != null) frontRight.setPower(frPower);
-        if (backRight != null) backRight.setPower(brPower);
-    }
+    // NOTE: manualDriveControl() method removed - now using MecanumDrive subsystem
+    // The PedroPathing Follower handles all drive control automatically
     
     /**
      * Removes small joystick movements to prevent drift
@@ -1176,9 +1023,13 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         // Scale the remaining input to maintain full range
         return Math.signum(value) * ((Math.abs(value) - JOYSTICK_DEADZONE) / (1.0 - JOYSTICK_DEADZONE));
     }
-
+    
     /**
-     * Adds minimum power to prevent motors from stalling
+     * Apply minimum power threshold to prevent motor stalling
+     * This ensures motors have enough power to overcome friction
+     * 
+     * @param power The calculated motor power
+     * @return The adjusted motor power with minimum threshold applied
      */
     private double applyMinPower(double power) {
         if (Math.abs(power) > 0 && Math.abs(power) < MIN_MOTOR_POWER) {
@@ -1186,6 +1037,198 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         }
         return power;
     }
+    
+    /**
+     * Handle manual drive control with field-oriented control (EXACT MATCH TO BLUE_DEC_TELEOP)
+     * Uses PedroPathing for heading only, controls motors directly
+     * Field-centric: Forward always moves toward field, regardless of robot orientation
+     */
+    private void manualDriveControl(double x, double y, double rx) {
+        // Store values before rotation for debug
+        fcYBefore = y;
+        fcXBefore = x;
+        
+        // Get the robot's current heading from PedroPathing (NOT from IMU directly)
+        double botHeading = 0.0;
+        boolean headingAvailable = false;
+        if (drive != null) {
+            try {
+                botHeading = drive.getPose().getHeading();
+                fcRawHeading = botHeading;
+                headingAvailable = true;
+            } catch (Exception e) {
+                telemetry.addData("ERROR", "Failed to get heading from PedroPathing: " + e.getMessage());
+                botHeading = 0.0;
+                headingAvailable = false;
+            }
+        }
+
+        // Convert joystick input to field coordinates (field-centric control)
+        // This makes forward always move toward the field, not the robot's current direction
+        if (headingAvailable && drive != null) {
+            // Use EXACT formula from BLUE_DEC_TELEOP (line 1148-1150)
+            // This is the standard field-centric rotation formula
+            // Rotate joystick input based on robot's heading
+            double temp = y * Math.cos(botHeading) - x * Math.sin(botHeading);
+            x = y * Math.sin(botHeading) + x * Math.cos(botHeading);
+            y = temp;
+            
+            // Apply strafe speed multiplier (only affects strafe, not forward/backward)
+            x *= STRAFE_POWER_MULTIPLIER;
+            
+            fcHeadingUsed = botHeading;
+            fcYAfter = y;
+            fcXAfter = x;
+            fcStatus = "ACTIVE";
+            
+            telemetry.addData("Field-Centric", "ACTIVE (Heading: " + String.format("%.1f°", Math.toDegrees(botHeading)) + ")");
+        } else {
+            // Robot-centric mode (fallback if PedroPathing not working)
+            fcStatus = "DISABLED - PedroPathing not available";
+            telemetry.addData("Field-Centric", "DISABLED - PedroPathing not available");
+        }
+
+        // Mecanum wheel calculations (EXACT match to BLUE_DEC_TELEOP lines 1163-1167)
+        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1);
+        double flPower = (y + x + rx) / denominator;
+        double blPower = (y - x + rx) / denominator;
+        double frPower = (y - x - rx) / denominator;
+        double brPower = (y + x - rx) / denominator;
+
+        // Apply minimum power threshold (EXACT match to BLUE_DEC_TELEOP)
+        flPower = applyMinPower(flPower);
+        blPower = applyMinPower(blPower);
+        frPower = applyMinPower(frPower);
+        brPower = applyMinPower(brPower);
+
+        // Apply power multiplier (EXACT match to BLUE_DEC_TELEOP)
+        flPower *= DRIVE_POWER_MULTIPLIER;
+        blPower *= DRIVE_POWER_MULTIPLIER;
+        frPower *= DRIVE_POWER_MULTIPLIER;
+        brPower *= DRIVE_POWER_MULTIPLIER;
+        
+        // Clamp power to maximum of 1.0 (EXACT match to BLUE_DEC_TELEOP)
+        flPower = Math.max(-1.0, Math.min(1.0, flPower));
+        blPower = Math.max(-1.0, Math.min(1.0, blPower));
+        frPower = Math.max(-1.0, Math.min(1.0, frPower));
+        brPower = Math.max(-1.0, Math.min(1.0, brPower));
+
+        // Apply motor powers (EXACT match to BLUE_DEC_TELEOP lines 1188-1191)
+        if (frontLeft != null) frontLeft.setPower(flPower);
+        if (backLeft != null) backLeft.setPower(blPower);
+        if (frontRight != null) frontRight.setPower(frPower);
+        if (backRight != null) backRight.setPower(brPower);
+    }
+    
+    /**
+     * Convert Limelight AprilTag data to PedroPathing coordinates
+     * Uses Limelight's botpose to correct PedroPathing's pose estimate
+     * 
+     * @param result Limelight result containing AprilTag data
+     * @return PedroPathing Pose with corrected coordinates, or null if invalid
+     */
+    private Pose getRobotPoseFromCamera(LLResult result) {
+        try {
+            // Get robot pose from Limelight (in FTC coordinates)
+            Pose3D botpose = result.getBotpose();
+            
+            // Check if pose data is valid
+            if (botpose == null) {
+                return null;
+            }
+            
+            // Check if we have valid AprilTag detections
+            if (result.getFiducialResults() == null || result.getFiducialResults().isEmpty()) {
+                return null;
+            }
+            
+            // Parse Pose3D string representation to extract coordinates
+            String poseString = botpose.toString();
+            double x = 0.0, y = 0.0, heading = 0.0;
+            
+            try {
+                // Extract x, y, and yaw (heading) from the pose string
+                String[] parts = poseString.replaceAll("[{}]", "").split(",");
+                for (String part : parts) {
+                    String[] keyValue = part.split("=");
+                    if (keyValue.length == 2) {
+                        String key = keyValue[0].trim();
+                        double value = Double.parseDouble(keyValue[1].trim());
+                        
+                        switch (key) {
+                            case "x":
+                                x = value;
+                                break;
+                            case "y":
+                                y = value;
+                                break;
+                            case "yaw":
+                                heading = value;
+                                break;
+                        }
+                    }
+                }
+            } catch (Exception parseException) {
+                telemetry.addData("ERROR", "Failed to parse Pose3D: " + parseException.getMessage());
+                return null;
+            }
+            
+            // Validate the coordinates
+            if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(heading) ||
+                Double.isInfinite(x) || Double.isInfinite(y) || Double.isInfinite(heading)) {
+                return null;
+            }
+            
+            // Check for reasonable field bounds
+            if (Math.abs(x) > 200 || Math.abs(y) > 200) {
+                return null;
+            }
+            
+            // Create Pose in FTC coordinate system
+            Pose ftcPose = new Pose(
+                x,      // X position in inches
+                y,      // Y position in inches  
+                heading, // Heading in radians
+                FTCCoordinates.INSTANCE
+            );
+            
+            // Convert from FTC coordinates to PedroPathing coordinates
+            Pose pedroPose = ftcPose.getAsCoordinateSystem(PedroCoordinates.INSTANCE);
+            
+            // Apply fusion with current PedroPathing pose for smoother corrections
+            if (drive == null) {
+                return pedroPose;
+            }
+            
+            Pose currentPose = drive.getPose();
+            
+            // Distance check to prevent large jumps
+            double distanceFromCurrent = Math.sqrt(
+                Math.pow(pedroPose.getX() - currentPose.getX(), 2) + 
+                Math.pow(pedroPose.getY() - currentPose.getY(), 2)
+            );
+            
+            // If the vision correction is too far from current pose, reject it
+            if (distanceFromCurrent > 50.0) { // 50 inch threshold
+                return null;
+            }
+            
+            // Use weighted average for smoother corrections (70% current, 30% vision)
+            double fusionWeight = 0.3; // 30% vision, 70% current
+            
+            double fusedX = currentPose.getX() * (1 - fusionWeight) + pedroPose.getX() * fusionWeight;
+            double fusedY = currentPose.getY() * (1 - fusionWeight) + pedroPose.getY() * fusionWeight;
+            double fusedHeading = currentPose.getHeading() * (1 - fusionWeight) + pedroPose.getHeading() * fusionWeight;
+            
+            return new Pose(fusedX, fusedY, fusedHeading);
+            
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "Failed to convert Limelight pose: " + e.getMessage());
+            return null;
+        }
+    }
+
+    // NOTE: applyMinPower() method removed - PedroPathing Follower handles power management automatically
     
     /**
      * Update telemetry with important robot information
@@ -1202,30 +1245,29 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         
         telemetry.addLine("=== RED JAN TELEOP ===");
         
-        // PinPoint IMU heading (no position tracking without odometry pods)
+        // Heading from PedroPathing Follower (manages IMU internally)
         telemetry.addData("Heading", String.format("%.1f°", Math.toDegrees(botHeading)));
-        telemetry.addData("Heading (Rad)", String.format("%.3f", botHeading));
-        if (odo != null) {
-            telemetry.addData("IMU Status", odo.getDeviceStatus().toString());
-            // Debug: Check if IMU is actually updating
-            try {
-                double currentHeading = odo.getHeading(AngleUnit.RADIANS);
-                telemetry.addData("IMU Heading", String.format("%.3f rad (%.1f°)", currentHeading, Math.toDegrees(currentHeading)));
-            } catch (Exception e) {
-                telemetry.addData("IMU Read Error", e.getMessage());
-            }
+        if (drive != null) {
+            telemetry.addData("IMU Status", "Managed by PedroPathing");
+            telemetry.addData("Field-Centric", "ENABLED (via PedroPathing)");
+            Pose currentPose = drive.getPose();
+            telemetry.addData("Pose", String.format("(%.1f, %.1f, %.1f°)", currentPose.getX(), currentPose.getY(), Math.toDegrees(currentPose.getHeading())));
         } else {
-            telemetry.addData("IMU Status", "DISCONNECTED");
-            telemetry.addData("WARNING", "Field-centric disabled - IMU is NULL!");
+            telemetry.addData("IMU Status", "Drivetrain not initialized");
+            telemetry.addData("Field-Centric", "DISABLED");
         }
         
-        // Intake status with gamepad state for debugging
+        // Field-Centric Debug Telemetry (always show)
+        telemetry.addLine("--- Field-Centric Debug ---");
+        telemetry.addData("FC Status", fcStatus);
+        telemetry.addData("FC Raw Heading", String.format("%.1f°", Math.toDegrees(fcRawHeading)));
+        telemetry.addData("FC Heading Used", String.format("%.1f°", Math.toDegrees(fcHeadingUsed)));
+        telemetry.addData("FC Input Before", String.format("y=%.2f, x=%.2f", fcYBefore, fcXBefore));
+        telemetry.addData("FC Output After", String.format("y=%.2f, x=%.2f", fcYAfter, fcXAfter));
+        
+        // Intake status
         if (intakeMotor != null) {
             telemetry.addData("Intake Power", String.format("%.2f", intakeMotor.getPower()));
-            telemetry.addData("L1 Button", gamepad1.left_bumper ? "PRESSED" : "RELEASED");
-            telemetry.addData("L2 Trigger", String.format("%.2f", gamepad1.left_trigger));
-        } else {
-            telemetry.addData("Intake Motor", "NULL - NOT INITIALIZED");
         }
         
         // Feed motor status
@@ -1235,10 +1277,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         
         // Auto-align status
         telemetry.addData("Auto-Align", autoAlignMode ? "ACTIVE" : "INACTIVE");
-        if (autoAlignMode) {
-            telemetry.addData("Align Time", String.format("%.1fs", autoAlignTimer.seconds()));
-            telemetry.addData("Align Rot Cmd", String.format("%.2f", autoAlignRotationCommand));
-        }
         
         // Limelight status and velocity calculation telemetry
         if (limelight != null) {
@@ -1267,50 +1305,36 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                     }
                 }
                 
-                // Line 1: Show tx and ty from Limelight
                 telemetry.addData("Limelight TX/TY", String.format("TX: %.2f° | TY: %.2f°", tx, ty) + 
                     (Math.abs(tx) <= AUTO_ALIGN_TX_TOLERANCE ? " [ALIGNED]" : ""));
                 
-                // Calculate distance from AprilTag to Limelight
+                // Calculate distance from AprilTag to Limelight (matching simplified calculation)
                 double distanceCalibrationFactor = 50.0;
                 double baseDistance = distanceCalibrationFactor / Math.sqrt(Math.max(ta, 0.1));
-                
-                // Apply distance multiplier
-                double appliedMultiplier = 1.0;
-                if (baseDistance < 40.0) {
-                    appliedMultiplier = 1.424;
-                } else if (baseDistance < 90.0) {
-                    appliedMultiplier = 1.42 + (baseDistance - 40.0) * (-0.00212);
-                } else {
-                    appliedMultiplier = Math.max(0.95, 1.333 + (baseDistance - 81.0) * (-0.0030));
-                }
-                
-                double actualDistance = baseDistance * appliedMultiplier;
+                double actualDistance = baseDistance * DISTANCE_CALIBRATION_MULTIPLIER;
+                actualDistance += 20.0;  // Add 20" offset to correct measurement error
                 actualDistance = Math.max(SHORT_DISTANCE_INCHES, Math.min(LONG_DISTANCE_INCHES, actualDistance));
                 
-                // Line 2: Show distance calculation
-                telemetry.addData("Distance to AprilTag", String.format("%.1f\" (TA: %.3f, Base: %.1f\", Mult: %.3f)", 
-                    actualDistance, ta, baseDistance, appliedMultiplier));
+                // Show distance and calculated velocity
+                telemetry.addData("Distance to AprilTag", String.format("%.1f\"", actualDistance));
                 
-                // Calculate velocity using polynomial curve
+                // Calculate velocity using simplified linear interpolation (matching actual calculation)
                 double normalizedDistance = (actualDistance - SHORT_DISTANCE_INCHES) / 
                     (LONG_DISTANCE_INCHES - SHORT_DISTANCE_INCHES);
-                double polynomialCurve = POLY_COEFF_A * normalizedDistance * normalizedDistance * normalizedDistance +
-                                        POLY_COEFF_B * normalizedDistance * normalizedDistance +
-                                        POLY_COEFF_C * normalizedDistance +
-                                        POLY_COEFF_D;
-                polynomialCurve = Math.max(0.0, Math.min(1.0, polynomialCurve));
-                
                 double calculatedVelocity = SHORT_DISTANCE_VELOCITY + 
-                    (LONG_DISTANCE_VELOCITY - SHORT_DISTANCE_VELOCITY) * polynomialCurve;
+                    (LONG_DISTANCE_VELOCITY - SHORT_DISTANCE_VELOCITY) * normalizedDistance;
+                
+                // Apply close-range reduction for display (if applicable)
+                if (actualDistance < REDUCTION_TAPER_DISTANCE) {
+                    double reductionFactor = 1.0 - ((actualDistance - SHORT_DISTANCE_INCHES) / 
+                        (REDUCTION_TAPER_DISTANCE - SHORT_DISTANCE_INCHES));
+                    reductionFactor = Math.max(0.0, Math.min(1.0, reductionFactor));
+                    double reduction = SHORT_DISTANCE_RPM_REDUCTION * reductionFactor;
+                    calculatedVelocity -= reduction;
+                }
                 calculatedVelocity = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, calculatedVelocity));
                 
-                // Line 3: Show calculated velocity
-                telemetry.addData("Calculated Velocity", String.format("%.0f RPM (NormDist: %.3f, Curve: %.3f)", 
-                    calculatedVelocity, normalizedDistance, polynomialCurve));
-                
-                // Additional debug info
-                telemetry.addData("Limelight Status", "CONNECTED - Target Detected");
+                telemetry.addData("Calculated Velocity", String.format("%.0f RPM", calculatedVelocity));
             } else {
                 // No valid target - set LED to RED
                 if (rgb != null) {
@@ -1322,9 +1346,8 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 }
                 
                 telemetry.addData("Limelight TX/TY", "NO TARGET");
-                telemetry.addData("Distance to AprilTag", "N/A - No target");
-                telemetry.addData("Calculated Velocity", "N/A - Using default: " + String.format("%.0f", SHOOTER_TARGET_VELOCITY) + " RPM");
-                telemetry.addData("Limelight Status", "NO TARGET");
+                telemetry.addData("Distance to AprilTag", "N/A");
+                telemetry.addData("Calculated Velocity", String.format("%.0f RPM (default)", SHOOTER_TARGET_VELOCITY));
             }
         } else {
             // Limelight not available - set LED to RED
@@ -1337,9 +1360,8 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             }
             
             telemetry.addData("Limelight TX/TY", "DISCONNECTED");
-            telemetry.addData("Distance to AprilTag", "N/A - Limelight disconnected");
-            telemetry.addData("Calculated Velocity", "N/A - Using default: " + String.format("%.0f", SHOOTER_TARGET_VELOCITY) + " RPM");
-            telemetry.addData("Limelight Status", "DISCONNECTED");
+            telemetry.addData("Distance to AprilTag", "N/A");
+            telemetry.addData("Calculated Velocity", String.format("%.0f RPM (default)", SHOOTER_TARGET_VELOCITY));
         }
         
         // Shooter status with detailed diagnostics
@@ -1356,9 +1378,6 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 telemetry.addData("Shooter R Vel", String.format("%.1f RPM", rightVel));
                 telemetry.addData("Target Vel", String.format("%.0f RPM", currentCalculatedVelocity));
                 telemetry.addData("Velocity %", String.format("%.1f%%", velocityPercent));
-                telemetry.addData("L Power", String.format("%.2f", leftPower));
-                telemetry.addData("R Power", String.format("%.2f", rightPower));
-                telemetry.addData("PIDF F", String.format("%.1f", SHOOTER_PIDF_F));
                 
                 // Warning if power is too low and velocity not reached
                 if (leftPower < 0.7 && leftVel < currentCalculatedVelocity * 0.9 && shooterState == ShooterState.SPIN_UP) {
@@ -1381,12 +1400,26 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             }
         }
         
-        // Drive motor powers
+        // Drivetrain status (from Follower)
+        if (drive != null) {
+            try {
+                Pose currentPose = drive.getPose();
+                Vector velocity = drive.getVelocity();
+                telemetry.addLine("--- Drivetrain Status ---");
+                telemetry.addData("Pose X", String.format("%.2f", currentPose.getX()));
+                telemetry.addData("Pose Y", String.format("%.2f", currentPose.getY()));
+                telemetry.addData("Pose Heading", String.format("%.1f°", Math.toDegrees(currentPose.getHeading())));
+                telemetry.addData("Velocity", String.format("%.2f in/s", velocity.getMagnitude()));
+            } catch (Exception e) {
+                telemetry.addData("Drivetrain Error", e.getMessage());
+            }
+        } else {
         telemetry.addLine("--- Drive Powers ---");
         telemetry.addData("FL", String.format("%.2f", flPower));
         telemetry.addData("FR", String.format("%.2f", frPower));
         telemetry.addData("BL", String.format("%.2f", blPower));
         telemetry.addData("BR", String.format("%.2f", brPower));
+        }
         
         telemetry.update();
     }
