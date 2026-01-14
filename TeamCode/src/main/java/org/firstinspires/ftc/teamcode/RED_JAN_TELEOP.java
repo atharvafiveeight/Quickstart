@@ -111,6 +111,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     // Drive Control Constants
     private static final double JOYSTICK_DEADZONE = 0.10;  // Ignore small joystick movements to prevent drift
     private static final double MIN_MOTOR_POWER = 0.12;    // Minimum power needed to make motors move
+    private static final double JOYSTICK_ZERO_THRESHOLD = 0.01;  // Threshold for considering joystick inputs as zero (for BRAKE mode)
     private static final double DRIVE_POWER_MULTIPLIER = 0.8;  // Overall speed control (0.8 = 80% speed)
     private static final double STRAFE_POWER_MULTIPLIER = 1.3;  // Strafe speed multiplier (1.3 = 30% faster strafe than forward)
     
@@ -125,18 +126,32 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     // Shooter Distance Constants
     private static final double SHORT_DISTANCE_INCHES = 36.0;   // Closest shooting distance (inches)
     private static final double LONG_DISTANCE_INCHES = 130.0;   // Farthest shooting distance (inches)
-    private static final double SHORT_DISTANCE_VELOCITY = 1000.0;  // Shooter speed at close distance (RPM) - reduced by 50 RPM
-    private static final double LONG_DISTANCE_VELOCITY = 1400.0;   // Shooter speed at far distance (RPM) - reduced by 50 RPM
     private static final double MIN_VELOCITY = 800.0;   // Slowest allowed shooter speed (RPM)
     private static final double MAX_VELOCITY = 1700.0;  // Fastest allowed shooter speed (RPM)
-    
-    // Shooter Velocity Adjustments
-    private static final double SHORT_DISTANCE_RPM_REDUCTION = 100.0;  // Reduce speed by this much for close shots (RPM)
-    private static final double REDUCTION_TAPER_DISTANCE = 80.0;       // Distance where reduction stops (inches)
     
     // Optional: Single distance calibration multiplier if base distance calculation needs adjustment
     // Set to 1.0 to use raw Limelight distance, or tune if distance readings are consistently off
     private static final double DISTANCE_CALIBRATION_MULTIPLIER = 1.0;  // Tune this if distance needs adjustment
+    
+    // Shooter Velocity Lookup Table (based on testing data)
+    // Format: {distance, velocity} pairs - distances must be in ascending order
+    // Velocities are adjusted based on test results (R1/R2 mode performance)
+    private static final double[][] VELOCITY_LOOKUP_TABLE = {
+        // Short distances (≤ 80")
+        {50.6, 965.0},   // Adjusted: 995 - 30 (misses all, lower by 30)
+        {58.3, 1044.0},  // Adjusted: 1054 - 10 (works well, reduce by 10)
+        {66.0, 1096.0},  // Works perfect
+        {67.5, 1105.0},  // Works perfect
+        {71.0, 1160.0},  // Adjusted: 1130 + 30 (2/3 went, increase by 30)
+        {76.1, 1164.0},  // Works perfect
+        {80.0, 1180.0},  // Interpolated point at 80" (transition point)
+        
+        // Long distances (> 80") - linear interpolation from 102.5" to 126"
+        {102.5, 1415.0}, // Starting point: 1415 RPM at 102.5"
+        {104.2, 1425.0}, // Calculated: linear interpolation between 102.5" (1415) and 126" (1550)
+        {106.5, 1438.0}, // Calculated: linear interpolation between 102.5" (1415) and 126" (1550)
+        {126.0, 1550.0}  // End point: 1550 RPM at 126"
+    };
     
     // Shooter Control Constants
     private static final double SHOOTER_TARGET_VELOCITY = 1000.0;  // Default speed when Limelight not working (RPM)
@@ -386,7 +401,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 
                 shooterMotorLeft.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoeffs);
                 shooterMotorRight.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoeffs);
-            } catch (Exception e) {
+                } catch (Exception e) {
                 telemetry.addData("ERROR", "Failed to configure shooter motors: " + e.getMessage());
                 shooterInitialized = false;
             }
@@ -562,33 +577,33 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             // Square inputs to make small movements smoother
             y = Math.copySign(y * y, y);
             x = Math.copySign(x * x, x);
-            rx = Math.copySign(rx * rx, rx);
+                rx = Math.copySign(rx * rx, rx);
 
             // ========================================
             // STEP 14: MANUAL DRIVE CONTROL (MATCHING BLUE_DEC_TELEOP)
             // ========================================
             // Use manual motor control matching BLUE_DEC_TELEOP exactly
             // Field-centric rotation is handled INSIDE manualDriveControl (not here)
-            manualDriveControl(x, y, rx);
+                    manualDriveControl(x, y, rx);
             
             // Get current heading for telemetry
-            double botHeading = 0.0;
+                    double botHeading = 0.0;
             if (drive != null) {
                 try {
                     // Get heading from PedroPathing's pose (more accurate than IMU alone)
                     botHeading = drive.getPose().getHeading();
-                } catch (Exception e) {
+                    } catch (Exception e) {
                     telemetry.addData("ERROR", "Failed to get heading from PedroPathing: " + e.getMessage());
+                    }
                 }
-            }
             
             // Get motor powers for telemetry (from actual motors)
-            double flPower = (frontLeft != null) ? frontLeft.getPower() : 0.0;
-            double frPower = (frontRight != null) ? frontRight.getPower() : 0.0;
-            double blPower = (backLeft != null) ? backLeft.getPower() : 0.0;
-            double brPower = (backRight != null) ? backRight.getPower() : 0.0;
+                double flPower = (frontLeft != null) ? frontLeft.getPower() : 0.0;
+                double frPower = (frontRight != null) ? frontRight.getPower() : 0.0;
+                double blPower = (backLeft != null) ? backLeft.getPower() : 0.0;
+                double brPower = (backRight != null) ? backRight.getPower() : 0.0;
             
-            updateTelemetry(flPower, frPower, blPower, brPower, botHeading);
+                updateTelemetry(flPower, frPower, blPower, brPower, botHeading);
         }
         
         // ========================================
@@ -656,12 +671,15 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             
             // Get current Limelight data
             if (limelight == null) {
+                telemetry.addData("AUTO-ALIGN", "ERROR: Limelight not available");
                 stopAutoAlign("Limelight not available");
                 return;
             }
             
             LLResult result = limelight.getLatestResult();
             if (result == null || !result.isValid()) {
+                telemetry.addData("AUTO-ALIGN", "WARNING: No valid AprilTag detected - cannot align");
+                telemetry.addData("AUTO-ALIGN", "Make sure AprilTag is in view of Limelight camera");
                 // Don't stop auto-align, just wait for tag to appear
                 autoAlignRotationCommand = 0.0;
                 return;
@@ -676,6 +694,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             if (Math.abs(tx) <= AUTO_ALIGN_TX_TOLERANCE) {
                 // Aligned! Stop rotation but keep mode active
                 autoAlignRotationCommand = 0.0;
+                telemetry.addData("AUTO-ALIGN", "ALIGNED! (tx=" + String.format("%.2f", tx) + "°)");
                 return;
             }
             
@@ -696,6 +715,9 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             
             // Store rotation command for use in drive control
             autoAlignRotationCommand = rotationCommand;
+            
+            telemetry.addData("AUTO-ALIGN", "Aligning... (tx=" + String.format("%.2f", tx) + 
+                "°, rot=" + String.format("%.2f", rotationCommand) + ")");
         }
     }
     
@@ -717,7 +739,9 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         
         // Check if already aligned
         double tx = result.getTx();
+        
         if (Math.abs(tx) <= AUTO_ALIGN_TX_TOLERANCE) {
+            telemetry.addData("AUTO-ALIGN", "Already aligned! (tx=" + String.format("%.2f", tx) + "°)");
             autoAlignMode = true;
             autoAlignRotationCommand = 0.0;
             autoAlignTimer.reset();
@@ -727,6 +751,11 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         // Initialize auto-align mode
         autoAlignMode = true;
         autoAlignTimer.reset();
+        
+        telemetry.addData("AUTO-ALIGN", "Mode started - aligning robot to center AprilTag");
+        telemetry.addData("AUTO-ALIGN", "Current tx=" + String.format("%.2f", tx) + 
+            "° (target: 0.0°, tolerance: ±" + String.format("%.1f", AUTO_ALIGN_TX_TOLERANCE) + "°)");
+        telemetry.addData("AUTO-ALIGN", "tx<0 means target left, tx>0 means target right");
     }
     
     /**
@@ -917,26 +946,23 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     
     /**
      * Calculate dynamic shooter velocity based on actual distance to AprilTag
-     * Simplified linear model: Uses Limelight ta to calculate distance, then linear interpolation
+     * Uses lookup table with linear interpolation between measured data points
      * 
-     * Velocity Range:
-     * - Short distance (36"): 1050 RPM - 100 RPM reduction = 950 RPM (for accuracy)
-     * - Long distance (130"): 1450 RPM (linear interpolation)
+     * Lookup Table Data (from testing):
+     * - Short distances (≤ 80"): Based on R1/R2 mode performance testing
+     * - Long distances (> 80"): Adjusted based on R1/R2 mode performance (increased by 50-80 RPM)
      * 
      * How it works:
      * 1. Calculate base distance from Limelight ta (target area)
      * 2. Apply optional calibration multiplier if distance needs adjustment
-     * 3. Clamp distance to working range [36", 130"]
-     * 4. Linear interpolation: velocity = 1000 + (1400-1000) × normalizedDistance
-     * 5. Apply close-range reduction (< 80") for better accuracy at short distances
+     * 3. Add 20" offset to correct for consistent measurement error
+     * 4. Look up velocity from table using linear interpolation
+     * 5. Extrapolate if distance is outside table range
      * 6. Clamp to safe limits [800, 1700] RPM
      * 
      * Tuning:
      * - DISTANCE_CALIBRATION_MULTIPLIER: Adjust if Limelight distance readings are consistently off
-     * - SHORT_DISTANCE_VELOCITY: Base velocity at close range (36")
-     * - LONG_DISTANCE_VELOCITY: Base velocity at far range (130")
-     * - SHORT_DISTANCE_RPM_REDUCTION: How much to reduce for close shots (helps accuracy)
-     * - REDUCTION_TAPER_DISTANCE: Distance where reduction stops (80")
+     * - VELOCITY_LOOKUP_TABLE: Update with new test data points as needed
      * 
      * @return Calculated target velocity in RPM
      */
@@ -965,33 +991,68 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         // Step 2: Apply optional calibration multiplier (set to 1.0 if not needed)
         double actualDistance = baseDistance * DISTANCE_CALIBRATION_MULTIPLIER;
         
-        // Step 2.5: Add 20" offset to correct for consistent measurement error
+        // Step 3: Add 20" offset to correct for consistent measurement error
         actualDistance += 20.0;
         
-        // Step 3: Clamp distance to working range
-        actualDistance = Math.max(SHORT_DISTANCE_INCHES, Math.min(LONG_DISTANCE_INCHES, actualDistance));
+        // Step 4: Look up velocity from table using linear interpolation
+        double calculatedVelocity = lookupVelocity(actualDistance);
         
-        // Step 4: Normalize distance to 0.0 (close) to 1.0 (far) for linear interpolation
-        double normalizedDistance = (actualDistance - SHORT_DISTANCE_INCHES) / 
-            (LONG_DISTANCE_INCHES - SHORT_DISTANCE_INCHES);
-        
-        // Step 5: Linear interpolation between short and long distance velocities
-        // At 36": normalizedDistance = 0.0 → velocity = 1050 RPM (after reduction: ~950 RPM)
-        // At 130": normalizedDistance = 1.0 → velocity = 1450 RPM
-        double calculatedVelocity = SHORT_DISTANCE_VELOCITY + 
-            (LONG_DISTANCE_VELOCITY - SHORT_DISTANCE_VELOCITY) * normalizedDistance;
-        
-        // Step 6: Apply close-range reduction for better accuracy at short distances
-        // Tapered reduction: 100 RPM at 36", 0 RPM at 80"
-        if (actualDistance < REDUCTION_TAPER_DISTANCE) {
-            double reductionFactor = 1.0 - ((actualDistance - SHORT_DISTANCE_INCHES) / 
-                (REDUCTION_TAPER_DISTANCE - SHORT_DISTANCE_INCHES));
-            reductionFactor = Math.max(0.0, Math.min(1.0, reductionFactor));
-            calculatedVelocity -= SHORT_DISTANCE_RPM_REDUCTION * reductionFactor;
+        // Step 5: Clamp to safe velocity limits
+        return Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, calculatedVelocity));
+    }
+    
+    /**
+     * Look up velocity from table using linear interpolation
+     * If distance is outside table range, extrapolates using the nearest two points
+     * 
+     * @param distance Distance in inches
+     * @return Interpolated velocity in RPM
+     */
+    private double lookupVelocity(double distance) {
+        // Handle edge cases: distance before first point or after last point
+        if (distance <= VELOCITY_LOOKUP_TABLE[0][0]) {
+            // Extrapolate backward using first two points
+            double dist1 = VELOCITY_LOOKUP_TABLE[0][0];
+            double vel1 = VELOCITY_LOOKUP_TABLE[0][1];
+            double dist2 = VELOCITY_LOOKUP_TABLE[1][0];
+            double vel2 = VELOCITY_LOOKUP_TABLE[1][1];
+            double slope = (vel2 - vel1) / (dist2 - dist1);
+            return vel1 + slope * (distance - dist1);
         }
         
-        // Step 7: Clamp to safe velocity limits
-        return Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, calculatedVelocity));
+        int lastIndex = VELOCITY_LOOKUP_TABLE.length - 1;
+        if (distance >= VELOCITY_LOOKUP_TABLE[lastIndex][0]) {
+            // Extrapolate forward using last two points
+            double dist1 = VELOCITY_LOOKUP_TABLE[lastIndex - 1][0];
+            double vel1 = VELOCITY_LOOKUP_TABLE[lastIndex - 1][1];
+            double dist2 = VELOCITY_LOOKUP_TABLE[lastIndex][0];
+            double vel2 = VELOCITY_LOOKUP_TABLE[lastIndex][1];
+            double slope = (vel2 - vel1) / (dist2 - dist1);
+            return vel2 + slope * (distance - dist2);
+        }
+        
+        // Find the two points to interpolate between
+        for (int i = 0; i < VELOCITY_LOOKUP_TABLE.length - 1; i++) {
+            double dist1 = VELOCITY_LOOKUP_TABLE[i][0];
+            double dist2 = VELOCITY_LOOKUP_TABLE[i + 1][0];
+            
+            if (distance >= dist1 && distance <= dist2) {
+                // Linear interpolation between these two points
+                double vel1 = VELOCITY_LOOKUP_TABLE[i][1];
+                double vel2 = VELOCITY_LOOKUP_TABLE[i + 1][1];
+                
+                if (dist2 == dist1) {
+                    // Avoid division by zero (shouldn't happen if table is valid)
+                    return vel1;
+                }
+                
+                double t = (distance - dist1) / (dist2 - dist1);
+                return vel1 + t * (vel2 - vel1);
+            }
+        }
+        
+        // Fallback (shouldn't reach here if table is valid)
+        return SHOOTER_TARGET_VELOCITY;
     }
     
     /**
@@ -1086,6 +1147,19 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             // Robot-centric mode (fallback if PedroPathing not working)
             fcStatus = "DISABLED - PedroPathing not available";
             telemetry.addData("Field-Centric", "DISABLED - PedroPathing not available");
+        }
+
+        // Explicit zero check: If all joystick inputs are effectively zero, set motors to exactly 0.0
+        // This ensures BRAKE mode activates when joysticks are released
+        if (Math.abs(x) < JOYSTICK_ZERO_THRESHOLD && 
+            Math.abs(y) < JOYSTICK_ZERO_THRESHOLD && 
+            Math.abs(rx) < JOYSTICK_ZERO_THRESHOLD) {
+            // All inputs are zero - set all motors to exactly 0.0 to activate BRAKE mode
+            if (frontLeft != null) frontLeft.setPower(0.0);
+            if (backLeft != null) backLeft.setPower(0.0);
+            if (frontRight != null) frontRight.setPower(0.0);
+            if (backRight != null) backRight.setPower(0.0);
+            return; // Exit early - no need to calculate mecanum powers
         }
 
         // Mecanum wheel calculations (EXACT match to BLUE_DEC_TELEOP lines 1163-1167)
@@ -1318,20 +1392,8 @@ public class RED_JAN_TELEOP extends LinearOpMode {
                 // Show distance and calculated velocity
                 telemetry.addData("Distance to AprilTag", String.format("%.1f\"", actualDistance));
                 
-                // Calculate velocity using simplified linear interpolation (matching actual calculation)
-                double normalizedDistance = (actualDistance - SHORT_DISTANCE_INCHES) / 
-                    (LONG_DISTANCE_INCHES - SHORT_DISTANCE_INCHES);
-                double calculatedVelocity = SHORT_DISTANCE_VELOCITY + 
-                    (LONG_DISTANCE_VELOCITY - SHORT_DISTANCE_VELOCITY) * normalizedDistance;
-                
-                // Apply close-range reduction for display (if applicable)
-                if (actualDistance < REDUCTION_TAPER_DISTANCE) {
-                    double reductionFactor = 1.0 - ((actualDistance - SHORT_DISTANCE_INCHES) / 
-                        (REDUCTION_TAPER_DISTANCE - SHORT_DISTANCE_INCHES));
-                    reductionFactor = Math.max(0.0, Math.min(1.0, reductionFactor));
-                    double reduction = SHORT_DISTANCE_RPM_REDUCTION * reductionFactor;
-                    calculatedVelocity -= reduction;
-                }
+                // Calculate velocity using lookup table (matching actual calculation)
+                double calculatedVelocity = lookupVelocity(actualDistance);
                 calculatedVelocity = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, calculatedVelocity));
                 
                 telemetry.addData("Calculated Velocity", String.format("%.0f RPM", calculatedVelocity));
