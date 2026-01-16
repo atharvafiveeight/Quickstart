@@ -95,7 +95,7 @@ public class RED_DEC_SHORT_AUTO extends OpMode {
     // ========================================
     private static final double INTAKE_FORWARD_POWER = 0.95;      // Power for intake when picking up
     private static final double INTAKE_MOVING_POWER = 0.7;        // Power for intake while moving to shotPose
-    private static final double FEED_MOTOR_POWER = 0.5;           // Power for feed motor when shooting
+    private static final double FEED_MOTOR_POWER = 0.8;           // Power for feed motor when shooting
     private static final double SHOOTER_PREWARM_PERCENT = 0.75;   // Pre-warm to 75% of target velocity
     
     // Shooter Distance Constants

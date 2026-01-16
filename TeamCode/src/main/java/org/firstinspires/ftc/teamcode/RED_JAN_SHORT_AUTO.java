@@ -26,15 +26,15 @@ import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.limelightvision.LLResult;
 
 /**
- * BLUE_DEC_SHORT_AUTO - Short Autonomous Program for December Robot (Blue Side)
+ * RED_JAN_SHORT_AUTO - Short Autonomous Program for January Robot (Red Side)
  * 
  * This autonomous program:
  * - Shoots preloaded balls at ShotPose1
- * - Picks up balls from IntakeB1 location (via IntakeB1Ready)
+ * - Picks up balls from IntakeR1 location (via IntakeR1Ready)
  * - Shoots those balls at ShotPose2
- * - Picks up balls from IntakeB2 location (via IntakeB2Ready)
+ * - Picks up balls from IntakeR2 location (via IntakeR2Ready)
  * - Shoots those balls at ShotPose3
- * - Picks up balls from IntakeB3 location (via IntakeB3Ready)
+ * - Picks up balls from IntakeR3 location (via IntakeR3Ready)
  * - Shoots those balls at ShotPose4
  * - Moves to StartPoseTeleop for teleop transition
  * 
@@ -44,12 +44,14 @@ import com.qualcomm.hardware.limelightvision.LLResult;
  * - Pre-warms shooter motors to 75% target velocity while moving to shotPose
  * - Runs intake motors during pickup and while moving to shotPose
  * 
+ * This is a mirrored version of BLUE_DEC_SHORT_AUTO for the Red side.
+ * 
  * @author Team
  * @version 2.0
  */
-@Autonomous(name = "BLUE_DEC_SHORT_AUTO", group = "Autonomous")
+@Autonomous(name = "RED_JAN_SHORT_AUTO", group = "Autonomous")
 @Configurable
-public class BLUE_DEC_SHORT_AUTO extends OpMode {
+public class RED_JAN_SHORT_AUTO extends OpMode {
 
     // ========================================
     // PEDRO PATHING
@@ -77,15 +79,15 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
     // PATH DEFINITIONS
     // ========================================
     private PathChain shotPose1;           // First shot (preloaded balls)
-    private PathChain intakeB1Ready;       // B1 intake ready position
-    private PathChain intakeB1;            // B1 intake position
-    private PathChain shotPose2;           // Second shot (after B1 intake)
-    private PathChain intakeB2Ready;       // B2 intake ready position
-    private PathChain intakeB2;            // B2 intake position
-    private PathChain shotPose3;           // Third shot (after B2 intake)
-    private PathChain intakeB3Ready;       // B3 intake ready position
-    private PathChain intakeB3;            // B3 intake position
-    private PathChain shotPose4;           // Fourth shot (after B3 intake)
+    private PathChain intakeR1Ready;       // R1 intake ready position
+    private PathChain intakeR1;            // R1 intake position
+    private PathChain shotPose2;           // Second shot (after R1 intake)
+    private PathChain intakeR2Ready;       // R2 intake ready position
+    private PathChain intakeR2;            // R2 intake position
+    private PathChain shotPose3;           // Third shot (after R2 intake)
+    private PathChain intakeR3Ready;       // R3 intake ready position
+    private PathChain intakeR3;            // R3 intake position
+    private PathChain shotPose4;           // Fourth shot (after R3 intake)
     private PathChain startPoseTeleop;    // Final position for teleop
     
     // ========================================
@@ -99,8 +101,8 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
     // Shooter Distance Constants
     private static final double SHORT_DISTANCE_INCHES = 36.0;
     private static final double LONG_DISTANCE_INCHES = 130.0;
-    private static final double SHORT_DISTANCE_VELOCITY = 1000.0;  // Reduced by 50 RPM from 1000.0
-    private static final double LONG_DISTANCE_VELOCITY = 1400.0;  // Reduced by 50 RPM from 1375.0
+    private static final double SHORT_DISTANCE_VELOCITY = 950.0;  // Reduced by 50 RPM from 1000.0
+    private static final double LONG_DISTANCE_VELOCITY = 1375.0;  // Reduced by 25 RPM from 1400.0
     private static final double MIN_VELOCITY = 800.0;
     private static final double MAX_VELOCITY = 1700.0;
     
@@ -117,7 +119,7 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
     private static final double POLY_COEFF_D = 0.0;
     
     // Shooter Control Constants
-    private static final double SHOOTER_TARGET_VELOCITY = 1425.0;  // Reduced by 50 RPM from 1475.0
+    private static final double SHOOTER_TARGET_VELOCITY = 1475.0;
     private static final double SHOOTER_VELOCITY_THRESHOLD = 0.95;
     private static final double SHOOTER_PIDF_P = 100.0;
     private static final double SHOOTER_PIDF_I = 0.0;
@@ -187,8 +189,8 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
         follower.setMaxPower(AUTONOMOUS_SPEED_MULTIPLIER);
         telemetry.addData("DEBUG", "MaxPower set to " + String.format("%.0f%%", AUTONOMOUS_SPEED_MULTIPLIER * 100));
         
-        // Starting pose: (20.093, 123.163, 143°)
-        follower.setStartingPose(new Pose(20.093, 123.163, Math.toRadians(143)));
+        // Starting pose: Mirrored from BLUE (20.093, 123.163, 143°) -> X reversed, Y same: (123.907, 123.163, 37°)
+        follower.setStartingPose(new Pose(123.907, 123.163, Math.toRadians(37)));
         
         pathTimer = new Timer();
         pathState = 0;
@@ -208,7 +210,7 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
         ballsScored = 0;
         shootingComplete = false;
         
-        telemetry.addData("Status", "BLUE_DEC_SHORT_AUTO Initialized");
+        telemetry.addData("Status", "RED_JAN_SHORT_AUTO Initialized");
         telemetry.update();
     }
     
@@ -368,89 +370,101 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
     }
     
     // ========================================
-    // PATH BUILDING (Updated paths from PedroAutonomous)
+    // PATH BUILDING (Mirrored from BLUE_DEC_SHORT_AUTO)
+    // X axis reversed (144-x), Y axis same, heading reversed (180°-heading)
     // ========================================
     private void buildPaths() {
         try {
             // ShotPose1: First shot (preloaded balls)
-            // Starting at (20.093, 123.163, 143°) → (49.674, 96.744), heading 143° to 136°
+            // Mirrored from BLUE: (20.093, 123.163, 143°) → (49.674, 96.744, 136°)
+            // RED: X reversed, Y same: (123.907, 123.163, 37°) → (94.326, 96.744, 44°)
             shotPose1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(20.093, 123.163), new Pose(49.674, 96.744)))
-                .setLinearHeadingInterpolation(Math.toRadians(143), Math.toRadians(136))
+                .addPath(new BezierLine(new Pose(123.907, 123.163), new Pose(94.326, 96.744)))
+                .setLinearHeadingInterpolation(Math.toRadians(37), Math.toRadians(44))
                 .build();
             
-            // IntakeB1Ready: Move to ready position for B1 intake
-            // (49.674, 96.744) → (45.767, 83.721), heading 136° to 180°
-            intakeB1Ready = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(49.674, 96.744), new Pose(45.767, 83.721)))
-                .setLinearHeadingInterpolation(Math.toRadians(136), Math.toRadians(180))
+            // IntakeR1Ready: Move to ready position for R1 intake
+            // Mirrored from BLUE: (49.674, 96.744) → (45.767, 83.721), heading 136° to 180°
+            // RED: X reversed, Y same: (94.326, 96.744) → (98.233, 83.721), heading 44° to 0°
+            intakeR1Ready = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(94.326, 96.744), new Pose(98.233, 83.721)))
+                .setLinearHeadingInterpolation(Math.toRadians(44), Math.toRadians(0))
                 .build();
             
-            // IntakeB1: Move to B1 intake position
-            // (45.767, 83.721) → (15.814, 83.349), heading 180° to 180°
-            intakeB1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(45.767, 83.721), new Pose(15.814, 83.349)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+            // IntakeR1: Move to R1 intake position
+            // Mirrored from BLUE: (45.767, 83.721) → (15.814, 83.349), heading 180° to 180°
+            // RED: X reversed, Y same: (98.233, 83.721) → (128.186, 83.349), heading 0° to 0°
+            intakeR1 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(98.233, 83.721), new Pose(128.186, 83.349)))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
             
-            // ShotPose2: Second shot (after B1 intake)
-            // (15.814, 83.349) → (49.674, 96.744), heading 180° to 136°
+            // ShotPose2: Second shot (after R1 intake)
+            // Mirrored from BLUE: (15.814, 83.349) → (49.674, 96.744), heading 180° to 136°
+            // RED: X reversed, Y same: (128.186, 83.349) → (94.326, 96.744), heading 0° to 44°
             shotPose2 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(15.814, 83.349), new Pose(49.674, 96.744)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(136))
+                .addPath(new BezierLine(new Pose(128.186, 83.349), new Pose(94.326, 96.744)))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(44))
                 .build();
             
-            // IntakeB2Ready: Move to ready position for B2 intake
-            // (49.674, 96.744) → (44.651, 59.535), heading 136° to 180°
-            intakeB2Ready = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(49.674, 96.744), new Pose(44.651, 59.535)))
-                .setLinearHeadingInterpolation(Math.toRadians(136), Math.toRadians(180))
+            // IntakeR2Ready: Move to ready position for R2 intake
+            // Mirrored from BLUE: (49.674, 96.744) → (44.651, 59.535), heading 136° to 180°
+            // RED: X reversed, Y same: (94.326, 96.744) → (99.349, 59.535), heading 44° to 0°
+            intakeR2Ready = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(94.326, 96.744), new Pose(99.349, 59.535)))
+                .setLinearHeadingInterpolation(Math.toRadians(44), Math.toRadians(0))
                 .build();
             
-            // IntakeB2: Move to B2 intake position
-            // (44.651, 59.535) → (8.000, 57.860), heading 180° to 180°
-            intakeB2 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(44.651, 59.535), new Pose(8.000, 57.860)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+            // IntakeR2: Move to R2 intake position
+            // Mirrored from BLUE: (44.651, 59.535) → (8.000, 57.860), heading 180° to 180°
+            // RED: X reversed, Y same: (99.349, 59.535) → (136.000, 57.860), heading 0° to 0°
+            intakeR2 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(99.349, 59.535), new Pose(136.000, 57.860)))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
             
-            // ShotPose3: Third shot (after B2 intake) - BezierCurve
-            // (8.000, 57.860) → (67.535, 61.395) → (49.488, 96.930), heading 180° to 136°
+            // ShotPose3: Third shot (after R2 intake) - BezierCurve
+            // Mirrored from BLUE: (8.000, 57.860) → (67.535, 61.395) → (49.488, 96.930), heading 180° to 136°
+            // RED: X reversed, Y same: (136.000, 57.860) → (76.465, 61.395) → (94.512, 96.930), heading 0° to 44°
             shotPose3 = follower.pathBuilder()
                 .addPath(new BezierCurve(
-                    new Pose(8.000, 57.860),
-                    new Pose(67.535, 61.395),
-                    new Pose(49.488, 96.930)
+                    new Pose(136.000, 57.860),
+                    new Pose(87.030, 43.809),
+                    new Pose(94.326, 96.744)
                 ))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(136))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(44))
                 .build();
             
-            // IntakeB3Ready: Move to ready position for B3 intake
-            // (49.488, 96.930) → (46.326, 35.721), heading 136° to 180°
-            intakeB3Ready = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(49.488, 96.930), new Pose(46.326, 35.721)))
-                .setLinearHeadingInterpolation(Math.toRadians(136), Math.toRadians(180))
+            // IntakeR3Ready: Move to ready position for R3 intake
+            // Mirrored from BLUE: (49.488, 96.930) → (46.326, 35.721), heading 136° to 180°
+            // RED: X reversed, Y same: (94.512, 96.930) → (97.674, 35.721), heading 44° to 0°
+            intakeR3Ready = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(94.512, 96.930), new Pose(97.674, 35.721)))
+                .setLinearHeadingInterpolation(Math.toRadians(44), Math.toRadians(0))
                 .build();
             
-            // IntakeB3: Move to B3 intake position
-            // (46.326, 35.721) → (9.116, 35.907), heading 180° to 180°
-            intakeB3 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(46.326, 35.721), new Pose(9.116, 35.907)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+            // IntakeR3: Move to R3 intake position
+            // Mirrored from BLUE: (46.326, 35.721) → (9.116, 35.907), heading 180° to 180°
+            // RED: X reversed, Y same: (97.674, 35.721) → (134.884, 35.907), heading 0° to 0°
+            intakeR3 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(97.674, 35.721), new Pose(134.884, 35.907)))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
             
-            // ShotPose4: Fourth shot (after B3 intake)
-            // (9.116, 35.907) → (49.674, 96.930), heading 180° to 136°
+            // ShotPose4: Fourth shot (after R3 intake)
+            // Mirrored from BLUE: (9.116, 35.907) → (49.674, 96.930), heading 180° to 136°
+            // RED: X reversed, Y same: (134.884, 35.907) → (94.326, 96.930), heading 0° to 44°
             shotPose4 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(9.116, 35.907), new Pose(49.674, 96.930)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(136))
+                .addPath(new BezierLine(new Pose(134.884, 35.907), new Pose(94.326, 96.930)))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(44))
                 .build();
             
             // StartPoseTeleop: Final position for teleop
-            // (49.674, 96.930) → (48.930, 75.721), heading 136° to 180°
+            // Mirrored from BLUE: (49.674, 96.930) → (48.930, 75.721), heading 136° to 180°
+            // RED: X reversed, Y same: (94.326, 96.930) → (95.070, 75.721), heading 44° to 0°
             startPoseTeleop = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(49.674, 96.930), new Pose(48.930, 75.721)))
-                .setLinearHeadingInterpolation(Math.toRadians(136), Math.toRadians(180))
+                .addPath(new BezierLine(new Pose(94.326, 96.930), new Pose(95.070, 75.721)))
+                .setLinearHeadingInterpolation(Math.toRadians(44), Math.toRadians(0))
                 .build();
             
             telemetry.addData("DEBUG", "All paths built successfully");
@@ -460,7 +474,7 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
     }
     
     // ========================================
-    // AUTONOMOUS STATE MACHINE (Updated for new paths)
+    // AUTONOMOUS STATE MACHINE (Mirrored from BLUE_DEC_SHORT_AUTO)
     // ========================================
     public void autonomousPathUpdate() {
         switch (pathState) {
@@ -487,50 +501,50 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
                 if (shootingComplete) {
                     setPathState(3);
                     shootingComplete = false; // Reset for next round
-                    telemetry.addData("DEBUG", "First shooting round complete, moving to intakeB1Ready");
+                    telemetry.addData("DEBUG", "First shooting round complete, moving to intakeR1Ready");
                 }
                 break;
                 
             case 3:
-                // Move to intakeB1Ready - start intake at full power
-                if (intakeB1Ready != null) {
+                // Move to intakeR1Ready - start intake at full power
+                if (intakeR1Ready != null) {
                     // Start intake at full power (1.0) when moving to intake spot
                     if (intakeMotor != null) {
                         intakeMotor.setPower(INTAKE_FULL_POWER);
                     }
-                    follower.followPath(intakeB1Ready);
+                    follower.followPath(intakeR1Ready);
                     setPathState(4);
-                    telemetry.addData("DEBUG", "Moving to intakeB1Ready with intake at full power");
+                    telemetry.addData("DEBUG", "Moving to intakeR1Ready with intake at full power");
                 }
                 break;
                 
             case 4:
-                // Wait for arrival at intakeB1Ready, then move to intakeB1
+                // Wait for arrival at intakeR1Ready, then move to intakeR1
                 if (!follower.isBusy()) {
                     setPathState(5);
-                    telemetry.addData("DEBUG", "Arrived at intakeB1Ready, moving to intakeB1");
+                    telemetry.addData("DEBUG", "Arrived at intakeR1Ready, moving to intakeR1");
                 }
                 break;
                 
             case 5:
-                // Move to intakeB1 - continue intake at full power
-                if (intakeB1 != null) {
+                // Move to intakeR1 - continue intake at full power
+                if (intakeR1 != null) {
                     // Keep intake at full power
                     if (intakeMotor != null) {
                         intakeMotor.setPower(INTAKE_FULL_POWER);
                     }
-                    follower.followPath(intakeB1);
+                    follower.followPath(intakeR1);
                     setPathState(6);
-                    telemetry.addData("DEBUG", "Moving to intakeB1 with intake at full power");
+                    telemetry.addData("DEBUG", "Moving to intakeR1 with intake at full power");
                 }
                 break;
                 
             case 6:
-                // Wait for arrival at intakeB1, then stop intake and move to shotPose2 with pre-warm
+                // Wait for arrival at intakeR1, then stop intake and move to shotPose2 with pre-warm
                 if (!follower.isBusy()) {
                     stopIntake();
                     setPathState(7);
-                    telemetry.addData("DEBUG", "Arrived at intakeB1, moving to shotPose2 with pre-warm");
+                    telemetry.addData("DEBUG", "Arrived at intakeR1, moving to shotPose2 with pre-warm");
                 }
                 break;
                 
@@ -564,50 +578,50 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
                 if (shootingComplete) {
                     setPathState(10);
                     shootingComplete = false; // Reset for next round
-                    telemetry.addData("DEBUG", "Second shooting round complete, moving to intakeB2Ready");
+                    telemetry.addData("DEBUG", "Second shooting round complete, moving to intakeR2Ready");
                 }
                 break;
                 
             case 10:
-                // Move to intakeB2Ready - start intake at full power
-                if (intakeB2Ready != null) {
+                // Move to intakeR2Ready - start intake at full power
+                if (intakeR2Ready != null) {
                     // Start intake at full power (1.0) when moving to intake spot
                     if (intakeMotor != null) {
                         intakeMotor.setPower(INTAKE_FULL_POWER);
                     }
-                    follower.followPath(intakeB2Ready);
+                    follower.followPath(intakeR2Ready);
                     setPathState(11);
-                    telemetry.addData("DEBUG", "Moving to intakeB2Ready with intake at full power");
+                    telemetry.addData("DEBUG", "Moving to intakeR2Ready with intake at full power");
                 }
                 break;
                 
             case 11:
-                // Wait for arrival at intakeB2Ready, then move to intakeB2
+                // Wait for arrival at intakeR2Ready, then move to intakeR2
                 if (!follower.isBusy()) {
                     setPathState(12);
-                    telemetry.addData("DEBUG", "Arrived at intakeB2Ready, moving to intakeB2");
+                    telemetry.addData("DEBUG", "Arrived at intakeR2Ready, moving to intakeR2");
                 }
                 break;
                 
             case 12:
-                // Move to intakeB2 - continue intake at full power
-                if (intakeB2 != null) {
+                // Move to intakeR2 - continue intake at full power
+                if (intakeR2 != null) {
                     // Keep intake at full power
                     if (intakeMotor != null) {
                         intakeMotor.setPower(INTAKE_FULL_POWER);
                     }
-                    follower.followPath(intakeB2);
+                    follower.followPath(intakeR2);
                     setPathState(13);
-                    telemetry.addData("DEBUG", "Moving to intakeB2 with intake at full power");
+                    telemetry.addData("DEBUG", "Moving to intakeR2 with intake at full power");
                 }
                 break;
                 
             case 13:
-                // Wait for arrival at intakeB2, then stop intake and move to shotPose3 with pre-warm
+                // Wait for arrival at intakeR2, then stop intake and move to shotPose3 with pre-warm
                 if (!follower.isBusy()) {
                     stopIntake();
                     setPathState(14);
-                    telemetry.addData("DEBUG", "Arrived at intakeB2, moving to shotPose3 with pre-warm");
+                    telemetry.addData("DEBUG", "Arrived at intakeR2, moving to shotPose3 with pre-warm");
                 }
                 break;
                 
@@ -641,50 +655,50 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
                 if (shootingComplete) {
                     setPathState(17);
                     shootingComplete = false; // Reset for next round
-                    telemetry.addData("DEBUG", "Third shooting round complete, moving to intakeB3Ready");
+                    telemetry.addData("DEBUG", "Third shooting round complete, moving to intakeR3Ready");
                 }
                 break;
                 
             case 17:
-                // Move to intakeB3Ready - start intake at full power
-                if (intakeB3Ready != null) {
+                // Move to intakeR3Ready - start intake at full power
+                if (intakeR3Ready != null) {
                     // Start intake at full power (1.0) when moving to intake spot
                     if (intakeMotor != null) {
                         intakeMotor.setPower(INTAKE_FULL_POWER);
                     }
-                    follower.followPath(intakeB3Ready);
+                    follower.followPath(intakeR3Ready);
                     setPathState(18);
-                    telemetry.addData("DEBUG", "Moving to intakeB3Ready with intake at full power");
+                    telemetry.addData("DEBUG", "Moving to intakeR3Ready with intake at full power");
                 }
                 break;
                 
             case 18:
-                // Wait for arrival at intakeB3Ready, then move to intakeB3
+                // Wait for arrival at intakeR3Ready, then move to intakeR3
                 if (!follower.isBusy()) {
                     setPathState(19);
-                    telemetry.addData("DEBUG", "Arrived at intakeB3Ready, moving to intakeB3");
+                    telemetry.addData("DEBUG", "Arrived at intakeR3Ready, moving to intakeR3");
                 }
                 break;
                 
             case 19:
-                // Move to intakeB3 - continue intake at full power
-                if (intakeB3 != null) {
+                // Move to intakeR3 - continue intake at full power
+                if (intakeR3 != null) {
                     // Keep intake at full power
                     if (intakeMotor != null) {
                         intakeMotor.setPower(INTAKE_FULL_POWER);
                     }
-                    follower.followPath(intakeB3);
+                    follower.followPath(intakeR3);
                     setPathState(20);
-                    telemetry.addData("DEBUG", "Moving to intakeB3 with intake at full power");
+                    telemetry.addData("DEBUG", "Moving to intakeR3 with intake at full power");
                 }
                 break;
                 
             case 20:
-                // Wait for arrival at intakeB3, then stop intake and move to shotPose4 with pre-warm
+                // Wait for arrival at intakeR3, then stop intake and move to shotPose4 with pre-warm
                 if (!follower.isBusy()) {
                     stopIntake();
                     setPathState(21);
-                    telemetry.addData("DEBUG", "Arrived at intakeB3, moving to shotPose4 with pre-warm");
+                    telemetry.addData("DEBUG", "Arrived at intakeR3, moving to shotPose4 with pre-warm");
                 }
                 break;
                 
@@ -743,7 +757,7 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
     }
     
     // ========================================
-    // SHOOTING STATE MACHINE (Same as RED_DEC_SHORT_AUTO)
+    // SHOOTING STATE MACHINE (from RED_DEC_LONG_AUTO)
     // ========================================
     public void autonomousShootingUpdate() {
         switch (shooterState) {
@@ -962,7 +976,7 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
     }
     
     // ========================================
-    // VELOCITY CALCULATION (Same as RED_DEC_SHORT_AUTO)
+    // VELOCITY CALCULATION (from RED_DEC_TELEOP)
     // ========================================
     /**
      * Calculate dynamic shooter velocity based on Limelight distance
@@ -1039,13 +1053,17 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
         // Keep velocity within safe limits
         calculatedVelocity = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, calculatedVelocity));
         
-        // Note: 50 RPM boost removed to lower all shots by 50 RPM
+        // Add 50 RPM boost for better accuracy at this distance
+        calculatedVelocity += 50.0;
+        
+        // Re-clamp after adding boost
+        calculatedVelocity = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, calculatedVelocity));
         
         return calculatedVelocity;
     }
     
     // ========================================
-    // AUTO-ALIGN METHODS (Same as RED_DEC_SHORT_AUTO)
+    // AUTO-ALIGN METHODS (from RED_DEC_TELEOP)
     // ========================================
     /**
      * Handle auto-align: Rotates robot to center AprilTag in Limelight view
@@ -1296,7 +1314,7 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
     private void updateTelemetry() {
         telemetry.clear();
         
-        telemetry.addLine("=== BLUE DEC SHORT AUTO ===");
+        telemetry.addLine("=== RED JAN SHORT AUTO ===");
         telemetry.addData("Drive Speed", String.format("%.0f%%", AUTONOMOUS_SPEED_MULTIPLIER * 100) + " (conservative for accuracy)");
         telemetry.addData("Path State", pathState);
         telemetry.addData("Path Busy", follower.isBusy());
@@ -1357,4 +1375,3 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
         telemetry.update();
     }
 }
-

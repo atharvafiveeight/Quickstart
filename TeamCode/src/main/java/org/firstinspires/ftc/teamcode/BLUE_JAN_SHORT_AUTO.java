@@ -26,7 +26,7 @@ import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.limelightvision.LLResult;
 
 /**
- * BLUE_DEC_SHORT_AUTO - Short Autonomous Program for December Robot (Blue Side)
+ * BLUE_JAN_SHORT_AUTO - Short Autonomous Program for January Robot (Blue Side)
  * 
  * This autonomous program:
  * - Shoots preloaded balls at ShotPose1
@@ -47,9 +47,9 @@ import com.qualcomm.hardware.limelightvision.LLResult;
  * @author Team
  * @version 2.0
  */
-@Autonomous(name = "BLUE_DEC_SHORT_AUTO", group = "Autonomous")
+@Autonomous(name = "BLUE_JAN_SHORT_AUTO", group = "Autonomous")
 @Configurable
-public class BLUE_DEC_SHORT_AUTO extends OpMode {
+public class BLUE_JAN_SHORT_AUTO extends OpMode {
 
     // ========================================
     // PEDRO PATHING
@@ -208,7 +208,7 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
         ballsScored = 0;
         shootingComplete = false;
         
-        telemetry.addData("Status", "BLUE_DEC_SHORT_AUTO Initialized");
+        telemetry.addData("Status", "BLUE_JAN_SHORT_AUTO Initialized");
         telemetry.update();
     }
     
@@ -1296,7 +1296,7 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
     private void updateTelemetry() {
         telemetry.clear();
         
-        telemetry.addLine("=== BLUE DEC SHORT AUTO ===");
+        telemetry.addLine("=== BLUE JAN SHORT AUTO ===");
         telemetry.addData("Drive Speed", String.format("%.0f%%", AUTONOMOUS_SPEED_MULTIPLIER * 100) + " (conservative for accuracy)");
         telemetry.addData("Path State", pathState);
         telemetry.addData("Path Busy", follower.isBusy());
@@ -1357,4 +1357,3 @@ public class BLUE_DEC_SHORT_AUTO extends OpMode {
         telemetry.update();
     }
 }
-

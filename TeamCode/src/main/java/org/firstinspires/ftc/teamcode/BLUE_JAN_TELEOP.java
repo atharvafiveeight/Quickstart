@@ -27,7 +27,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import java.util.List;
 
 /**
- * RED_JAN_TELEOP - Field-Oriented Control TeleOp Program for January Robot
+ * BLUE_JAN_TELEOP - Field-Oriented Control TeleOp Program for January Robot
  * 
  * This program provides smooth, field-oriented control using the GoBilda PinPoint IMU.
  * Field-oriented control means the robot moves relative to the field, not relative to the robot's current heading.
@@ -59,8 +59,8 @@ import java.util.List;
  * @author Team
  * @version 1.0 - Initial January robot implementation
  */
-@TeleOp(name = "RED_JAN_TELEOP", group = "TeleOp")
-public class RED_JAN_TELEOP extends LinearOpMode {
+@TeleOp(name = "BLUE_JAN_TELEOP", group = "TeleOp")
+public class BLUE_JAN_TELEOP extends LinearOpMode {
 
     // ========================================
     // DRIVETRAIN MOTORS (MANUAL CONTROL)
@@ -174,6 +174,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     private static final double AUTO_ALIGN_TX_GAIN = 0.14;       // How fast to rotate based on target position
     private static final double AUTO_ALIGN_TIMEOUT = 3.0;        // Stop trying after 3 seconds
     private static final double AUTO_ALIGN_MIN_ROTATE = 0.05;    // Minimum rotation to make robot move
+    private static final double AUTO_ALIGN_TX_OFFSET = -3.0;    // Offset to the left by 3 degrees (for Blue side only)
     
     // Dynamic velocity calculation (updated based on limelight distance)
     private double currentCalculatedVelocity = SHOOTER_TARGET_VELOCITY; // Current target velocity
@@ -471,7 +472,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         // ========================================
         // STEP 7: READY TO START
         // ========================================
-        telemetry.addData("Status", "RED_JAN_TELEOP Ready!");
+        telemetry.addData("Status", "BLUE_JAN_TELEOP Ready!");
         telemetry.addData("Localization", "PedroPathing Follower (Pinpoint Odometry)");
         telemetry.addData("Control Mode", "Field-Oriented Control (via Follower)");
         telemetry.addData("Drivetrain", drive != null ? "Initialized" : "FAILED");
@@ -692,34 +693,39 @@ public class RED_JAN_TELEOP extends LinearOpMode {
             // tx > 0: Target to the right → rotate right (positive rotation)
             double tx = result.getTx();
             
+            // Apply 3-degree left offset for Blue side (adjust tx to account for offset)
+            // Offset is -3.0, so we subtract it: adjustedTx = tx - (-3.0) = tx + 3.0
+            // This means when tx = -3.0, adjustedTx = 0 (aligned)
+            double adjustedTx = tx - AUTO_ALIGN_TX_OFFSET;
+            
             // Check if heading is aligned (within tolerance)
-            if (Math.abs(tx) <= AUTO_ALIGN_TX_TOLERANCE) {
+            if (Math.abs(adjustedTx) <= AUTO_ALIGN_TX_TOLERANCE) {
                 // Aligned! Stop rotation but keep mode active
                 autoAlignRotationCommand = 0.0;
-                telemetry.addData("AUTO-ALIGN", "ALIGNED! (tx=" + String.format("%.2f", tx) + "°)");
+                telemetry.addData("AUTO-ALIGN", "ALIGNED! (tx=" + String.format("%.2f", tx) + "°, adjusted=" + String.format("%.2f", adjustedTx) + "°)");
                 return;
             }
             
-            // Calculate rotation speed based on tx value using proportional control
-            // tx < 0 (target left) → negative rotation (rotate left)
-            // tx > 0 (target right) → positive rotation (rotate right)
-            // Direct mapping: rotation direction matches tx direction
-            double rotationCommand = tx * AUTO_ALIGN_TX_GAIN;
+            // Calculate rotation speed based on adjusted tx value using proportional control
+            // adjustedTx < 0 (target left) → negative rotation (rotate left)
+            // adjustedTx > 0 (target right) → positive rotation (rotate right)
+            // Direct mapping: rotation direction matches adjustedTx direction
+            double rotationCommand = adjustedTx * AUTO_ALIGN_TX_GAIN;
             
             // Clamp rotation speed to maximum
             rotationCommand = Math.max(-AUTO_ALIGN_ROTATION_SPEED, Math.min(AUTO_ALIGN_ROTATION_SPEED, rotationCommand));
             
             // Enforce minimum rotation to ensure movement
             if (Math.abs(rotationCommand) < AUTO_ALIGN_MIN_ROTATE) {
-                // Use tx sign to determine rotation direction if command is too small
-                rotationCommand = Math.copySign(AUTO_ALIGN_MIN_ROTATE, tx);
+                // Use adjustedTx sign to determine rotation direction if command is too small
+                rotationCommand = Math.copySign(AUTO_ALIGN_MIN_ROTATE, adjustedTx);
             }
             
             // Store rotation command for use in drive control
             autoAlignRotationCommand = rotationCommand;
             
             telemetry.addData("AUTO-ALIGN", "Aligning... (tx=" + String.format("%.2f", tx) + 
-                "°, rot=" + String.format("%.2f", rotationCommand) + ")");
+                "°, adjusted=" + String.format("%.2f", adjustedTx) + "°, rot=" + String.format("%.2f", rotationCommand) + ")");
         }
     }
     
@@ -742,8 +748,11 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         // Check if already aligned
         double tx = result.getTx();
         
-        if (Math.abs(tx) <= AUTO_ALIGN_TX_TOLERANCE) {
-            telemetry.addData("AUTO-ALIGN", "Already aligned! (tx=" + String.format("%.2f", tx) + "°)");
+        // Apply 3-degree left offset for Blue side (adjust tx to account for offset)
+        double adjustedTx = tx - AUTO_ALIGN_TX_OFFSET;
+        
+        if (Math.abs(adjustedTx) <= AUTO_ALIGN_TX_TOLERANCE) {
+            telemetry.addData("AUTO-ALIGN", "Already aligned! (tx=" + String.format("%.2f", tx) + "°, adjusted=" + String.format("%.2f", adjustedTx) + "°)");
             autoAlignMode = true;
             autoAlignRotationCommand = 0.0;
             autoAlignTimer.reset();
@@ -754,9 +763,9 @@ public class RED_JAN_TELEOP extends LinearOpMode {
         autoAlignMode = true;
         autoAlignTimer.reset();
         
-        telemetry.addData("AUTO-ALIGN", "Mode started - aligning robot to center AprilTag");
+        telemetry.addData("AUTO-ALIGN", "Mode started - aligning robot to center AprilTag (with 3° left offset)");
         telemetry.addData("AUTO-ALIGN", "Current tx=" + String.format("%.2f", tx) + 
-            "° (target: 0.0°, tolerance: ±" + String.format("%.1f", AUTO_ALIGN_TX_TOLERANCE) + "°)");
+            "° (adjusted=" + String.format("%.2f", adjustedTx) + "°, target: 0.0°, tolerance: ±" + String.format("%.1f", AUTO_ALIGN_TX_TOLERANCE) + "°)");
         telemetry.addData("AUTO-ALIGN", "tx<0 means target left, tx>0 means target right");
     }
     
@@ -1319,7 +1328,7 @@ public class RED_JAN_TELEOP extends LinearOpMode {
     private void updateTelemetry(double flPower, double frPower, double blPower, double brPower, double botHeading) {
         telemetry.clear();
         
-        telemetry.addLine("=== RED JAN TELEOP ===");
+        telemetry.addLine("=== BLUE JAN TELEOP ===");
         
         // 1. Heading
         telemetry.addData("Heading", String.format("%.1f°", Math.toDegrees(botHeading)));
